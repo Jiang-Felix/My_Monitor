@@ -1,0 +1,19 @@
+.cadence-controls{margin:4px 0 20px;padding:18px 0 4px;border-top:1px solid var(--line)}
+.cadence-header{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:6px}
+.cadence-header label{margin:0}.cadence-header output{font-size:13px;color:var(--blue);font-variant-numeric:tabular-nums}
+input.cadence-slider[type=range]{appearance:none;width:100%;height:28px;padding:0;border:0;margin:0;background:transparent;cursor:pointer;border-radius:6px}
+.cadence-slider::-webkit-slider-runnable-track{height:6px;border-radius:3px;background:linear-gradient(to right,#7fc8bb 0 10%,#57728d 10% 100%)}
+.cadence-slider::-webkit-slider-thumb{appearance:none;width:16px;height:16px;margin-top:-5px;border:2px solid #f0f6fc;border-radius:50%;background:var(--blue);box-shadow:0 0 0 4px #bcd9f022}
+.cadence-controls.lightweight .cadence-slider::-webkit-slider-thumb{background:var(--teal);box-shadow:0 0 0 4px #7fc8bb33}
+.cadence-ticks{position:relative;height:32px;margin:0 8px}
+.cadence-tick{position:absolute;top:0;transform:translateX(-50%);padding:7px 3px;border:0;border-radius:4px;background:transparent;color:var(--muted);font-size:10px;line-height:1.2;white-space:nowrap}
+.cadence-tick:first-child{transform:translateX(-25%)}.cadence-tick:last-child{transform:translateX(-75%)}
+.cadence-tick.fast{color:var(--teal)}.cadence-tick.selected{font-weight:650;color:var(--text);background:#bcd9f01c}
+.cadence-controls.lightweight .cadence-tick.selected{color:var(--teal);background:#7fc8bb1a}
+.cadence-mode{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:12px 0 10px;font-size:11px;color:var(--muted)}
+.cadence-status{border:1px solid #58728a;border-radius:5px;padding:5px 8px;color:var(--blue)}
+.cadence-controls.lightweight .cadence-status{color:var(--teal);border-color:#63998e;background:#7fc8bb12}
+#cadence-legend{color:var(--teal);font-size:10px}.cadence-controls .help{margin:0 0 8px}
+.cadence-controls.non-web .cadence-slider::-webkit-slider-runnable-track{background:#57728d}
+.cadence-controls.non-web .cadence-tick.fast{color:var(--muted)}
+@media(max-width:620px){.cadence-mode{align-items:flex-start;flex-direction:column;gap:8px}.cadence-tick{font-size:9px}}

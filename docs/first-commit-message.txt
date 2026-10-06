@@ -1,0 +1,8 @@
+feat: initial release of My Monitor v0.1.0
+
+- Add local web metrics, fixed values and test-mode HTTP sources
+- Add range alerts with charts, recording cadence and notification controls
+- Add translucent floating progress overlay with change visualization
+- Add themes, localization, tray interactions and startup preferences
+- Add security hardening, isolated tests and versioned Windows packaging
+- Prepare MIT license, documentation, screenshots and GitHub community files

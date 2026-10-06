@@ -1,0 +1,19 @@
+.floating-row{display:flex;align-items:center;flex:0 0 var(--row-height,var(--bar-height));width:100%;min-width:0;color:#fff;font:12px "Segoe UI","Microsoft YaHei UI",sans-serif}
+.floating-name{flex:0 0 28px;width:28px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.floating-percent{flex:0 0 48px;width:48px;padding-left:4px;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.floating-track{position:relative;flex:1 1 var(--bar-width);min-width:0;height:var(--bar-height);width:100%;border-radius:999px;overflow:hidden;background:var(--track-color);backdrop-filter:blur(12px) saturate(.8);box-shadow:inset 0 1px 3px #0004,inset 0 -1px 0 #ffffff0a}
+.floating-fill,.floating-delta,.floating-cap,.floating-red{position:absolute;left:0;top:0;height:100%;width:0;border:0;border-radius:999px;pointer-events:none}
+.floating-red{z-index:0}
+.floating-fill{background:var(--fill-color);z-index:1}
+.floating-delta{z-index:2}
+.floating-cap{background:var(--fill-color);z-index:3}
+.floating-amount{position:absolute;z-index:4;top:0;left:0;width:100%;height:100%;padding:0 10px;display:flex;align-items:center;justify-content:space-between;overflow:hidden;white-space:pre;color:#fff;text-shadow:0 1px 2px #000,0 0 3px #000;font:12px/var(--bar-height) system-ui,sans-serif;font-variant-numeric:tabular-nums}
+.floating-current,.floating-change{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.floating-current:empty,.floating-change:empty{display:none}
+.floating-change{flex-shrink:0;max-width:100%}
+.floating-amount[data-align=left]{justify-content:flex-start}
+.floating-amount[data-align=center]{justify-content:center}
+.floating-amount[data-align=right]{justify-content:flex-end}
+.floating-glass{position:relative;background:linear-gradient(155deg,#ffffff0d,#ffffff00 65%),var(--panel-background);backdrop-filter:blur(24px) saturate(.8);border:1px solid #ffffff3d;box-shadow:inset 0 1px 0 #ffffff12,0 3px 10px #0003;border-radius:24px}
+
+.floating-glass>.floating-rows,.floating-glass>.floating-row{position:relative;z-index:1}

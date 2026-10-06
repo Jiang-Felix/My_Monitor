@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 使用说明 / User guide
+    url: https://github.com/Jiang-Felix/My_Monitor/blob/main/docs/USER_GUIDE.md
+    about: 提交前查看操作、频率与状态说明。
+  - name: 安全报告 / Security reporting
+    url: https://github.com/Jiang-Felix/My_Monitor/security/policy
+    about: 安全漏洞请按 SECURITY.md 私密报告，不公开凭证和利用细节。

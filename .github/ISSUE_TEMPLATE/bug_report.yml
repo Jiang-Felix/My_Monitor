@@ -1,0 +1,53 @@
+name: 缺陷报告 / Bug report
+description: 报告可复现的问题；请勿提交凭证或安全漏洞细节。
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: "请先查找已有 Issue。Token、Cookie、用户数据目录和私人网址不得上传；安全问题使用 Security → Advisories 私密报告。"
+  - type: input
+    id: version
+    attributes:
+      label: 软件版本 / App version
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: 系统与启动方式 / Environment
+      placeholder: Windows 11 x64，Release ZIP / npm start
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤 / Steps to reproduce
+      description: 使用模拟数据或可公开的信息描述操作，不附真实登录资料。
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期行为 / Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为 / Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 脱敏截图 / Sanitized evidence
+      description: 可选。遮盖账号、主机名、Token、Cookie 和私人 URL；不要上传 AppData 目录或 monitor-state 文件。
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: 提交检查 / Before submitting
+      options:
+        - label: 我确认不包含凭证或私人数据 / No credentials or private data are included.
+          required: true

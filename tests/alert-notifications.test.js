@@ -1,0 +1,21 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { AlertEngine, validateAlertRule } from '../core/alerts.js';
+const rule={id:'a',name:'定量告警',sourceId:'s',type:'value',lower:0,upper:5,updateEvery:1};
+test('muting notifications preserves every recorded outside checkpoint and enabling resumes delivery without resetting',()=>{
+  let now=1000;const sent=[];
+  const engine=new AlertEngine({now:()=>now,onNotify:item=>sent.push(item)});engine.startRun();
+  const source=()=>({id:'s',name:'量',kind:'fixed',enabled:true,interval:60,status:'ok',lastSuccess:now,sample:{value:10,total:null}});
+  engine.upsert({...rule,notificationsEnabled:false},source());
+  now++;engine.observe([source()]);now++;engine.observe([source()]);
+  assert.equal(sent.length,0,'silence must skip the OS notification boundary');
+  const before=engine.snapshot().tracking[0];assert.equal(before.points.length,2);assert.equal(before.outside,true);
+  assert.equal(before.lastAlert.delivery,'muted');assert.equal(engine.snapshot().notifications.length,2);
+  engine.upsert({...rule,notificationsEnabled:true},source());
+  assert.deepEqual(engine.snapshot().tracking[0],before,'notification toggle alone preserves the whole segment');
+  now++;engine.observe([source()]);assert.equal(sent.length,1);assert.equal(engine.snapshot().tracking[0].points.length,3);
+  const saved=engine.serialize();engine.finishRun();const restored=new AlertEngine();restored.startRun(saved);
+  assert.equal(restored.snapshot().rules[0].notificationsEnabled,true);
+  assert.equal(validateAlertRule(rule).notificationsEnabled,true,'existing rules default to notifications enabled');
+  for(const notificationsEnabled of [0,1,'false',null])assert.throws(()=>validateAlertRule({...rule,notificationsEnabled}));
+});

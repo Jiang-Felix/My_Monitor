@@ -1,0 +1,20 @@
+.alert-filter-bar .tabs{flex-wrap:wrap;gap:8px}
+[data-alert-filter=active] .filter-count{color:var(--teal)}
+[data-alert-filter=silent] .filter-count{color:var(--blue)}
+[data-alert-filter=paused] .filter-count{color:var(--amber)}
+.alert-entry-main{grid-template-columns:minmax(150px,260px) minmax(220px,1fr) minmax(100px,160px) 72px}
+.range-entry .alert-entry-actions{display:grid;grid-template-columns:repeat(2,32px);gap:8px;justify-content:end;align-content:center;margin:0}
+.alert-entry-actions .icon-control{width:32px;height:32px;padding:0;cursor:pointer}
+.alert-entry-actions .icon-control:hover{background:#3c5670}
+.alert-entry-actions svg{width:20px;height:20px}
+.alert-entry-actions .stop-action{color:var(--red);font-size:18px}
+.alert-entry-actions .start-action{color:var(--teal);font-size:16px}
+.alert-entry-actions [data-alert-action=chart]{color:var(--detection-color)}
+.alert-entry-actions .is-expanded{background:#7fc8bb1a;border-color:var(--detection-color)}
+.alert-entry-actions [data-alert-action=notifications]{color:var(--teal)}
+.alert-entry-actions [data-alert-action=notifications].is-silent{color:var(--muted)}
+.alert-chart-detail:not([open]){display:none}.range-axis{height:92px}
+.range-axis .axis-current{fill:var(--text)}
+.alert-notification-option{margin:0 0 18px;font-size:12px}
+@media(max-width:1150px){.alert-entry-main{grid-template-columns:minmax(120px,170px) minmax(160px,1fr) 72px}}
+@media(max-width:850px){.alert-entry-main{grid-template-columns:minmax(0,1fr) 72px}}

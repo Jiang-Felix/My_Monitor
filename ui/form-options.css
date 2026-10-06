@@ -1,0 +1,13 @@
+.choice-field{margin:0 0 18px;min-width:0}.choice-field>label{margin-bottom:8px}
+.choice-buttons{display:flex;gap:8px;flex-wrap:wrap}
+.choice-button{flex:1;min-width:130px;padding:12px 14px;border:1px solid var(--line);border-radius:7px;background:#132639;color:var(--muted);font:inherit;font-size:13px;line-height:1.45;text-align:center}
+.choice-button:hover{border-color:#587a96;background:#20384f;color:var(--text)}
+.choice-button.selected{background:#29445d;border-color:#91b6d4;color:var(--text)}
+.choice-button:disabled{opacity:.45;cursor:default}
+body:not(.test-mode) .native-choice{display:none}
+body.test-mode .choice-buttons,body.test-mode .alert-multiplier-controls{display:none}
+.alert-multiplier-controls{margin:0 0 18px}
+.alert-multiplier-controls .cadence-header label{font-size:12px}
+.alert-multiplier-controls .cadence-slider::-webkit-slider-runnable-track{background:linear-gradient(to right,var(--blue) 0 var(--multiplier-position,0%),#57728d var(--multiplier-position,0%) 100%)}
+.alert-multiplier-controls .help{font-size:11px;margin:8px 0 0;line-height:1.6}
+.alert-multiplier-controls .cadence-ticks{margin-bottom:6px}

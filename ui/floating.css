@@ -1,0 +1,19 @@
+/* The native window is transparent; only the gray panel carries opacity. */
+* { box-sizing: border-box; }
+:root { --panel-background: rgba(116, 118, 122, .62); --track-color: rgba(20,21,23,.48); --fill-color: #fafafa; --bar-height: 20px; --bar-width: 300px; }
+[hidden] { display: none !important; }
+html, body { margin: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; }
+body { padding: 8px; user-select: none; }
+/* CSS backdrop filters can blur the preview's document, but cannot sample other
+   native windows. Avoid filtering our own translucent surface a second time. */
+.floating-panel, .floating-panel .floating-track { backdrop-filter: none; }
+.floating-panel {
+  height: 100%; padding: 18px; border-radius: 24px;
+  -webkit-app-region: drag;
+}
+.floating-rows {
+  display: flex; flex-direction: column; gap: 12px; height: 100%;
+  overflow-y: auto; scrollbar-width: none; -webkit-app-region: no-drag;
+}
+.floating-rows::-webkit-scrollbar { display: none; }
+.floating-placeholder { flex: 0 0 var(--row-height,var(--bar-height)); }

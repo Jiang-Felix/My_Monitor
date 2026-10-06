@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'">
+  <title>My Monitor · 浮窗</title>
+  <link rel="stylesheet" href="floating-row.css">
+  <link rel="stylesheet" href="floating.css">
+  <script type="module" src="floating.js"></script>
+</head>
+<body>
+  <main class="floating-panel floating-glass" aria-label="资源进度">
+    <div id="floating-rows" class="floating-rows" aria-live="polite"></div>
+  </main>
+</body>
+</html>

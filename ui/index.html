@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>My Monitor</title>
+  <link rel="stylesheet" href="floating-row.css">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="source-cadence.css">
+  <link rel="stylesheet" href="alert-controls.css">
+  <link rel="stylesheet" href="form-options.css">
+  <link rel="stylesheet" href="theme.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand"><img id="brand-icon" class="brand-mark" src="assets/mini-w.png" alt="" aria-hidden="true"><div>My Monitor<span class="brand-caption">实时数据，一眼看清</span></div></div>
+      <nav aria-label="页面">
+        <button class="nav-item active" data-page="data"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M7 16v-4m5 4V7m5 9v-6"/></svg><span class="nav-label">数据</span><span id="nav-count" class="count">0</span></button>
+        <button class="nav-item" data-page="alarms"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9m-8 12h4"/></svg><span class="nav-label">告警</span><span id="alert-count" class="count">0</span></button>
+        <button class="nav-item" data-page="floating"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 8h18"/><rect x="10" y="12" width="8" height="6" rx="1.5"/></svg><span class="nav-label">浮窗</span></button>
+        <button class="nav-item" data-page="settings"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h6m4 0h8M3 12h12m4 0h2M3 18h2m4 0h12"/><circle cx="11" cy="6" r="2"/><circle cx="17" cy="12" r="2"/><circle cx="7" cy="18" r="2"/></svg><span class="nav-label">设置</span></button>
+      </nav>
+      <div class="version">首版预览 · 0.1.0</div>
+    </aside>
+    <main>
+      <div id="storage-banner" class="banner" hidden role="alert"></div>
+      <div id="data-page">
+      <section class="overview-header"><div><h1 id="heading">实时数据</h1><p class="intro">查看实时数据，处理采集状态。</p></div><button id="add-button" class="button primary">＋ 添加数据源</button></section>
+      <div class="section-bar"><div class="tabs" aria-label="筛选监控状态"><button class="tab selected" data-filter="all" aria-pressed="true">全部 <span id="source-count" class="filter-count">0</span></button><button class="tab" data-filter="normal" aria-pressed="false">监控正常 <span id="healthy-count" class="filter-count">0</span></button><button class="tab" data-filter="abnormal" aria-pressed="false">监控异常 <span id="issue-count" class="filter-count">0</span></button></div><div class="view-switch" aria-label="数据显示方式"><button class="tab" data-view="card">卡片</button><button class="tab" data-view="list">列表</button></div><span id="updated-label" class="updated-label">尚未添加数据源</span></div>
+      <section id="cards" class="cards" aria-label="资源指标" aria-live="polite"></section>
+      <section id="empty" class="empty"><div class="empty-art" aria-hidden="true"><span>¥</span><span>▰</span><span>%</span></div><h2>从第一个数据源开始</h2><p>连接一个返回 JSON 的接口，或在登录后的网页里<br>点击选择你关心的数值。</p><button id="empty-add" class="button primary">添加数据源</button><button id="empty-demo" class="button subtle">先体验演示</button></section>
+      </div>
+      <section id="alarms-page" hidden aria-label="告警管理">
+        <div class="overview-header"><div><h1>告警</h1><p class="intro">为相邻变化量或实时数据设置范围，查看每条记录。</p></div><button id="add-alert" class="button primary">＋ 新增告警</button></div>
+        <div class="section-bar alert-filter-bar"><div id="alert-filters" class="tabs" role="group" aria-label="告警分类"><button class="tab selected" data-alert-filter="all" aria-pressed="true">全部 <span class="filter-count" id="alarm-total-count">0</span></button><button class="tab" data-alert-filter="active" aria-pressed="false">活跃告警 <span class="filter-count" id="alarm-active-count">0</span></button><button class="tab" data-alert-filter="silent" aria-pressed="false">静默告警 <span class="filter-count" id="alarm-silent-count">0</span></button><button class="tab" data-alert-filter="paused" aria-pressed="false">暂停告警 <span class="filter-count" id="alarm-paused-count">0</span></button></div><span id="tracking-count" hidden></span></div>
+        <div id="alert-list" class="alert-list"></div>
+      </section>
+      <section id="floating-page" hidden aria-label="浮窗设置">
+        <div class="overview-header"><div><h1>浮窗</h1></div><button id="floating-page-toggle" class="button primary">打开浮窗</button></div>
+        <form id="floating-settings" class="floating-settings-layout" novalidate>
+          <div class="floating-settings-controls">
+            <h2 class="form-section-title">外观</h2>
+            <div class="form-grid"><label>浮窗背景颜色<input name="backgroundColor" type="color"></label><label>背景透明度<input name="backgroundOpacity" type="number" step="0.01" min="0.05" max="1" required></label><label>进度条背景颜色<input name="trackColor" type="color"></label><label>进度条颜色<input name="fillColor" type="color"></label></div>
+            <label class="floating-dimension"><span><span>进度条高度</span><output id="bar-height-label" for="bar-height" data-i18n-ignore>20px</output></span><input id="bar-height" name="barHeight" class="floating-size-slider cadence-slider" type="range" min="4" max="80" step="1" value="20"><small id="bar-height-hint" data-i18n-dynamic></small></label>
+            <label class="floating-dimension"><span><span>进度条宽度</span><output id="bar-width-label" for="bar-width" data-i18n-ignore>300px</output></span><input id="bar-width" name="barWidth" class="floating-size-slider cadence-slider" type="range" min="120" max="640" step="1" value="300"></label>
+            <h2 class="form-section-title">显示内容</h2>
+            <label class="option-row"><input name="showName" class="setting-switch" type="checkbox" role="switch" checked><span>显示名称标签<small>进度条左侧显示数据名称的第一个字符</small></span></label>
+            <label class="option-row"><input name="showAmount" class="setting-switch" type="checkbox" role="switch" checked><span>显示实时数据<small>在进度条内显示实时数据</small></span></label>
+            <label class="option-row"><input name="showTotal" class="setting-switch" type="checkbox" role="switch" checked><span>显示总量数据<small>在实时数据后附加 / 总量数据；开启“显示实时数据”后可调整</small></span></label>
+            <label class="option-row"><input name="showUnit" class="setting-switch" type="checkbox" role="switch" checked><span>显示单位<small>实时数据右侧显示一次单位，例如 75/100GB；变化量始终不带数值单位</small></span></label>
+            <label class="option-row"><input name="showPercent" class="setting-switch" type="checkbox" role="switch" checked><span>显示百分比<small>进度条右侧显示比例，无有效总量数据时显示 --</small></span></label>
+            <h2 class="form-section-title delta-color-options">变化量</h2>
+            <label class="option-row"><input name="showSmooth" class="setting-switch" type="checkbox" role="switch" checked><span>平滑移动<small>进度与变化色带缓入缓出，整次动画在0.3秒内完成</small></span></label>
+            <label class="option-row"><input name="showDeltaBand" class="setting-switch" type="checkbox" role="switch" checked><span>最近变化量可视化<small>保留最近一次非零变化的增加或减少区段，数值未变化时继续显示</small></span></label>
+            <div class="form-grid delta-color-options"><label>增加颜色<input name="increaseColor" type="color"></label><label>减少颜色<input name="decreaseColor" type="color"></label></div>
+            <label class="option-row"><input name="showDeltaValue" class="setting-switch" type="checkbox" role="switch" checked><span>瞬时变化量数值<small>例如 +5/1分钟；每次更新计算，时间分母使用数据源设置的更新间隔，与实时数据间保留两个空格</small></span></label>
+            <label class="option-row"><input name="showZeroDelta" class="setting-switch" type="checkbox" role="switch"><span>显示零变化<small>瞬时变化量为 0 时也显示；开启“瞬时变化量数值”后可调整</small></span></label>
+            <div class="floating-text-choice"><label id="floating-text-align-label" for="floating-text-align">文字对齐</label><select id="floating-text-align" name="textAlign" hidden><option value="left">居左</option><option value="center">居中</option><option value="right">居右</option><option value="distributed">分散</option></select><div id="floating-text-options" class="choice-buttons" data-choice-for="textAlign" role="group" aria-labelledby="floating-text-align-label"></div><p class="help">分散：实时数据靠左，瞬时变化量靠右</p></div>
+            <p class="help">宽度指进度条本身，标签区域另计。窗口会适配显示器可用空间；拖动边缘移动，按 Esc 关闭。</p>
+          </div>
+          <div class="floating-preview-area"><h2 class="form-section-title">预览</h2><div id="floating-preview" class="floating-preview floating-glass"></div><p class="help">四个样例：常规（GB）、无总量数据（credits）、增减动画（¥、次）。动态样例每1.5秒更新，循环演示增减与切换；预览随输入变化，真实浮窗在保存后更新。</p><p id="floating-settings-error" class="form-error" role="alert"></p><div class="settings-actions"><button type="submit" class="button primary">保存浮窗设置</button><button id="floating-reset" type="button" class="button subtle">恢复默认</button></div></div>
+        </form>
+      </section>
+      <section id="settings-page" hidden aria-label="应用设置">
+        <div class="overview-header"><div><h1>设置</h1><p class="intro">个性化界面与启动方式。</p></div></div>
+        <div class="app-identity">
+          <img class="profile-logo" src="assets/Profile.png" alt="My Monitor">
+          <h2>My Monitor</h2>
+          <p class="app-version"><span>版本</span> <span id="app-version" data-i18n-ignore>0.1.0</span></p>
+          <div class="developer"><img src="assets/LOGOPWB.png" alt="Felix_Jiang"><span><span>开发者</span> <strong data-i18n-ignore>Felix_Jiang</strong></span></div>
+          <a id="repository-link" href="https://github.com/Jiang-Felix/My_Monitor" title="在浏览器中打开 GitHub 仓库">GitHub · Jiang-Felix/My_Monitor <span aria-hidden="true">↗</span></a>
+        </div>
+        <div class="app-preferences">
+          <h2 class="form-section-title">偏好设置</h2>
+          <div class="theme-preference"><h3 id="theme-label">监控配色</h3><p>选择适合你的色彩搭配。</p><div id="theme-options" class="theme-options" role="group" aria-labelledby="theme-label" data-i18n-dynamic></div></div>
+          <div class="preference-row"><div><h3>界面语言</h3><p>在简体中文与英文之间切换。</p></div><button id="language-toggle" type="button" class="button subtle language-toggle" data-i18n-dynamic aria-label="Switch to English">English</button></div>
+          <div class="preference-row"><div><h3>测试模式</h3><p>显示高级监控选项与调试信息。</p><p id="mode-indicator" class="mode-indicator" data-i18n-dynamic role="status">常规模式</p></div><button id="test-mode-toggle" type="button" class="button subtle" aria-pressed="false">测试模式</button></div>
+          <label class="preference-row"><span><strong>启动时打开浮窗</strong><small>每次打开软件时显示浮窗。</small></span><input id="floating-on-startup" class="setting-switch" type="checkbox" role="switch" checked title="启动时打开浮窗"></label>
+          <label class="preference-row"><span><strong>托盘单击切换浮窗</strong><small>左键单击托盘图标，打开或关闭浮窗。</small></span><input id="tray-single-click" class="setting-switch" type="checkbox" role="switch" checked title="托盘单击切换浮窗"></label>
+          <label class="preference-row"><span><strong>托盘双击打开主界面</strong><small>左键双击托盘图标，打开主界面。</small></span><input id="tray-double-click" class="setting-switch" type="checkbox" role="switch" checked title="托盘双击打开主界面"></label>
+          <label class="preference-row"><span><strong>开机自启</strong><small>登录 Windows 后自动打开 My Monitor。</small></span><input id="launch-at-login" class="setting-switch" type="checkbox" role="switch" title="开机自启"></label>
+          <p id="startup-availability" class="help" hidden>开机自启仅支持打包后的应用程序</p>
+          <p id="app-settings-error" class="form-error" role="alert" data-i18n-dynamic></p>
+        </div>
+      </section>
+      <footer class="footer"><span>My Monitor</span></footer>
+    </main>
+  </div>
+  <dialog id="source-dialog" aria-labelledby="dialog-title">
+    <form id="source-form" novalidate>
+      <div class="dialog-header"><div><p class="dialog-kicker">连接你的资源</p><h2 id="dialog-title">添加数据源</h2></div><button type="button" id="close-dialog" class="icon-button" aria-label="关闭" title="关闭">×</button></div>
+      <div class="kind-switch" role="group" aria-label="采集方式"><button type="button" data-kind="http" data-test-only hidden>HTTP 接口</button><button type="button" data-kind="web" class="selected">网页选取</button></div>
+      <div class="form-grid"><label>名称<input name="name" required maxlength="60" placeholder="例如：云服务余额"></label><label>显示单位<input name="unit" maxlength="16" placeholder="USD、GB、次"></label></div>
+      <label id="url-field">数据源网址<input name="url" type="url" required placeholder="https://example.com/api/usage"></label>
+      <div id="http-fields"><div class="form-grid"><label>数值字段路径<input name="valuePath" placeholder="data.balance"></label><label>总量数据字段路径 <span class="optional">可选</span><input name="totalPath" placeholder="data.total"></label></div><p class="help">支持 data.balance 或 data[0].used。总量数据与数值应属于同一单位和周期。</p><label>Bearer Token <span id="token-note" class="optional">可选 · 本机加密保存</span><input name="token" type="password" autocomplete="off" placeholder="需要授权时填写"></label><label class="checkbox-label"><input name="clearToken" type="checkbox">清除已保存的 Token</label></div>
+      <div id="web-fields" hidden>
+        <p class="help" data-test-only>实时数据和总量数据可分别来自网页或固定数值。固定数值只在修改配置时变化；两者应使用同一单位和周期。</p>
+        <div class="metric-input-group">
+          <div class="choice-field"><label id="value-mode-label" for="value-mode">实时数据来源</label><select id="value-mode" class="native-choice" name="valueMode"><option value="web">网页选取</option><option value="fixed">固定数值</option></select><div class="choice-buttons" data-choice-for="valueMode" role="group" aria-labelledby="value-mode-label"></div></div>
+          <div id="value-web-fields"><div class="selection-row"><button type="button" id="pick-value" class="button subtle">选取实时数据</button><output id="selected-value">尚未选择</output></div><label data-test-only>实时数据元素选择器<input name="selector" maxlength="2000" placeholder="例如 #balance；不能直接填写数值"></label></div>
+          <label id="value-fixed-field" hidden>固定实时数据<input name="fixedValue" inputmode="decimal" placeholder="例如 36.5" aria-describedby="fixed-help"></label>
+        </div>
+        <div class="metric-input-group">
+          <div class="choice-field"><label id="total-mode-label" for="total-mode">总量数据来源</label><select id="total-mode" class="native-choice" name="totalMode"><option value="none">不设置总量数据</option><option value="web">网页选取</option><option value="fixed">固定数值</option></select><div class="choice-buttons" data-choice-for="totalMode" role="group" aria-labelledby="total-mode-label"></div></div>
+          <div id="total-web-fields" hidden><div class="selection-row"><button type="button" id="pick-total" class="button subtle">选取总量数据</button><output id="selected-total">未设置总量数据</output><button type="button" id="clear-total" class="text-button">清除</button></div><label data-test-only>总量数据元素选择器<input name="totalSelector" maxlength="2000" placeholder="例如 #total-quota；不能直接填写数值"></label></div>
+          <label id="total-fixed-field" hidden>固定总量数据<input name="fixedTotal" inputmode="decimal" placeholder="例如 100" aria-describedby="fixed-help"></label>
+        </div>
+        <p id="fixed-help" class="help" data-test-only>固定数值支持 0 和小数，请勿填写单位或文字。实时数据大于总量数据时，卡片会标为“监控异常”。</p>
+        <div data-test-only hidden><div id="web-update-field"><label>网页更新方式<select name="webUpdateMode"><option value="reload">重新加载网页（最短 30 秒）</option><option value="live">读取页面实时变化</option></select></label><p class="help">实时模式复用已打开页面，最快每秒读取选中元素。网站需要自行更新数值；此模式不会强制网站发送新请求。</p></div></div><div data-test-only hidden><div id="web-wait-fields"><label>网页等待时间（秒）<input name="waitSeconds" type="number" min="1" max="60" step="1" value="3"></label><p class="help">在独立窗口里正常登录后选取，只选择含有一个数值的文字元素。选择器为 CSS 格式，可手动修正。默认至少等待 3 秒；慢页面可适当增加。登录过期时，请在编辑数据源中打开登录窗口。</p></div></div>
+      </div>
+      <section id="cadence-controls" class="cadence-controls" aria-labelledby="cadence-label">
+        <div class="cadence-header"><label id="cadence-label" for="cadence-slider">更新频率</label><output id="cadence-value" for="cadence-slider" aria-live="polite">1分钟</output></div>
+        <input id="cadence-slider" class="cadence-slider" type="range" min="0" max="10" step="1" value="2" aria-describedby="cadence-hint cadence-legend">
+        <div id="cadence-ticks" class="cadence-ticks"></div>
+        <div class="cadence-mode"><span id="cadence-status" class="cadence-status">定时重新加载网页</span><span id="cadence-legend">绿色档位：网页自主更新</span></div>
+        <p id="cadence-hint" class="help">按所选周期重新加载网页，读取最新数值。</p>
+        <p id="cadence-custom-note" class="help" hidden>已保留自定义周期；移动滑动条可选择预设档位。</p>
+      </section>
+      <div id="raw-refresh-fields" data-test-only hidden><p id="fast-refresh-note" class="help" hidden>小于 30 秒的周期会增加请求与资源消耗，请遵守接口限流和网站更新频率。</p><div class="form-grid"><label>刷新周期（秒）<input name="interval" type="number" required min="1" max="2592000" step="1" value="60"></label><div class="form-hint">默认 60 秒；最长 30 天。接口和固定值最快 1 秒。<br>平台有更新延迟时可适当延长。</div></div></div>
+      <div id="preview-output" class="preview" hidden></div><p id="form-error" class="form-error" role="alert"></p>
+      <div id="source-actions" class="source-editor-actions" role="group" aria-label="数据源操作" hidden><button id="source-login" type="button" class="button subtle" hidden>打开登录窗口</button><button id="source-open" type="button" class="button subtle" hidden>在浏览器打开</button><button id="source-delete" type="button" class="button danger" hidden>删除数据源</button></div>
+      <div class="dialog-footer"><button type="button" id="preview-button" class="button subtle">测试读取</button><div><button type="button" id="cancel-dialog" class="button subtle">取消</button><button type="submit" id="save-button" class="button primary">保存数据源</button></div></div>
+    </form>
+  </dialog>
+  <dialog id="alert-dialog" aria-labelledby="alert-dialog-title">
+    <form id="alert-form" novalidate>
+      <div class="dialog-header"><h2 id="alert-dialog-title">新增告警</h2><button id="alert-close" type="button" class="icon-button" aria-label="关闭" title="关闭">×</button></div>
+      <label>告警名称<input name="name" maxlength="60" required placeholder="例如：用量变化检测"></label>
+      <label>检测数据<select name="sourceId" required></select></label>
+      <div class="choice-field"><label id="alert-type-label" for="alert-type">检测类型</label><select id="alert-type" class="native-choice" name="type"><option value="delta">变量检测 · 相邻记录的变化量</option><option value="value">定量检测 · 单次记录的实时数据</option></select><div class="choice-buttons" data-choice-for="type" role="group" aria-labelledby="alert-type-label"></div></div>
+      <p id="alert-type-note" class="help" data-test-only hidden></p>
+      <div class="form-grid"><label>范围下限 <span class="optional" data-test-only hidden>可留空</span><input name="lower" inputmode="decimal" placeholder="例如 -5"></label><label>范围上限 <span class="optional" data-test-only hidden>可留空</span><input name="upper" inputmode="decimal" placeholder="例如 5"></label></div>
+      <p class="help" data-test-only hidden>至少填写一侧边界，允许负数与小数。上下限均属于范围内。<span id="alert-unit-note"></span></p>
+      <label data-test-only hidden>每几次数据更新记录一次<input name="updateEvery" type="number" min="1" max="2592000" step="1" value="1" required></label>
+      <section id="alert-multiplier-controls" class="alert-multiplier-controls" aria-labelledby="alert-multiplier-label"><div class="cadence-header"><label id="alert-multiplier-label" for="alert-multiplier-slider">记录倍率</label><output id="alert-multiplier-value" for="alert-multiplier-slider" aria-live="polite">1×</output></div><input id="alert-multiplier-slider" class="cadence-slider" type="range" min="1" max="12" step="0.5" value="1" aria-describedby="alert-interval-note alert-multiplier-hint"><div id="alert-multiplier-ticks" class="cadence-ticks"></div><p id="alert-custom-cadence" class="help" hidden>已保留自定义更新次数；移动滑动条可选择1×–12×。</p><p id="alert-multiplier-hint" class="help">按成功的数据更新计数；半档倍率交替记录，例如1.5×按2次、1次交替，不增加数据请求。</p></section>
+      <p id="alert-interval-note" class="help" aria-live="polite"></p>
+      <label class="checkbox-label alert-notification-option"><input name="notificationsEnabled" type="checkbox" checked>发送系统通知</label>
+      <p class="help" data-test-only hidden>只计成功的数据更新，不增加采集请求。每个越界记录均提醒；停止保留图表，开始时清空重置。重启或采集中断后，运行中的告警开始新记录段。</p>
+      <p id="alert-form-error" class="form-error" role="alert"></p>
+      <div class="dialog-footer"><div><button id="alert-cancel" type="button" class="button subtle">取消</button><button id="alert-delete" type="button" class="button danger" hidden>删除条目</button></div><button id="alert-save" type="submit" class="button primary">保存告警</button></div>
+    </form>
+  </dialog>
+  <dialog id="delete-dialog" aria-labelledby="delete-title" aria-describedby="delete-description"><h2 id="delete-title">删除数据源？</h2><p id="delete-description">该数据源的配置、缓存和授权信息将删除，关联的告警及其记录、图表和提醒回执也会一并删除。</p><div class="dialog-footer"><button id="delete-cancel" class="button subtle">取消</button><button id="delete-confirm" class="button danger">删除</button></div></dialog>
+  <div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>

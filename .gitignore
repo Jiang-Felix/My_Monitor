@@ -1,0 +1,43 @@
+# Dependencies and generated distributions
+/node_modules/
+/release/
+/artifacts/
+/coverage/
+.nyc_output/
+
+# Private design notes / original media (public assets live in ui/assets)
+/docs/prompts.md
+/docs/concept-proposal.md
+/docs/superpowers/
+/docs/png/
+/docs/screenshots/
+
+# Local configuration, credentials, browser profiles and runtime state
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+monitor-state.json*
+monitor-state*.tmp
+Cookies
+Cookies-journal
+/userData/
+/userdata/
+/profiles/
+/sessions/
+
+# Logs, caches and machine-specific files
+*.log
+*.tmp
+*.bak
+.cache/
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
+*.user
+*.suo
