@@ -12,6 +12,8 @@ export async function runDocsMediaSmoke({ mainWindow, monitor, getFloating, root
   };
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
   for (let n = 0; n < 100 && !await run('!!document.querySelector("#empty-add")'); n++) await sleep(50);
+  const version=(await invoke('snapshot')).version;
+  assert.equal(await run(`document.querySelector('.version').textContent.includes(${JSON.stringify(version)})`),true,'sidebar uses the current runtime version');
   const output = join(root, 'docs/media');
   await mkdir(output, { recursive: true });
   mainWindow.setContentSize(1260, 860);
@@ -67,8 +69,10 @@ export async function runDocsMediaSmoke({ mainWindow, monitor, getFloating, root
   await sleep(500);
   assert.ok(getFloating() && !getFloating().isDestroyed());
   await writeFile(join(output, 'floating.png'), (await getFloating().webContents.capturePage()).toPNG());
+  mainWindow.setContentSize(1260,1280);
   await run('document.querySelector("[data-page=settings]").click();true');
   await capture('settings.png');
+  mainWindow.setContentSize(1260,860);
   await invoke('appSettings', { theme: 'sand' });
   await run('document.querySelector("[data-page=data]").click();true');
   await capture('data-sand.png');

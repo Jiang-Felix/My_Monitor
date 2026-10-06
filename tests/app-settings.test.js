@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { appSettings, validateAppSettings } from '../core/app-settings.js';
 import { StartupPreference } from '../desktop/startup.js';
-const defaultSettings={floatingOnStartup:true,theme:'ocean',traySingleClick:true,trayDoubleClick:true};
+import {DEFAULT_WEB_LIMITS} from '../core/web-resource-settings.js';
+const defaultSettings={floatingOnStartup:true,theme:'ocean',traySingleClick:true,trayDoubleClick:true,lowUsageMode:false,webLimits:{...DEFAULT_WEB_LIMITS}};
 
 test('startup floating preference defaults on, preserves false and rejects malformed updates', () => {
   assert.deepEqual(appSettings(), defaultSettings);
@@ -21,11 +22,24 @@ test('theme updates preserve startup preference and startup updates preserve the
 
 test('tray gestures default on independently and saved false survives all partial preference updates',()=>{
   const saved=validateAppSettings({traySingleClick:false,trayDoubleClick:false},{floatingOnStartup:false,theme:'sand'});
-  assert.deepEqual(saved,{floatingOnStartup:false,theme:'sand',traySingleClick:false,trayDoubleClick:false});
+  assert.deepEqual(saved,{...defaultSettings,floatingOnStartup:false,theme:'sand',traySingleClick:false,trayDoubleClick:false});
   assert.deepEqual(appSettings(saved),saved);
   assert.deepEqual(validateAppSettings({theme:'cloud'},saved),{...saved,theme:'cloud'});
   assert.deepEqual(validateAppSettings({traySingleClick:true},saved),{...saved,traySingleClick:true});
   for(const key of ['traySingleClick','trayDoubleClick'])for(const value of [0,'false',null])assert.throws(()=>validateAppSettings({[key]:value}));
+});
+
+test('low usage mode is opt-in, survives partial updates and validates threshold changes',()=>{
+  assert.equal(appSettings({}).lowUsageMode,false);
+  const enabled=validateAppSettings({lowUsageMode:true});
+  assert.equal(validateAppSettings({theme:'cloud'},enabled).lowUsageMode,true);
+  const custom=validateAppSettings({webLimits:{requestLimit:300,rendererMemoryMiB:512}},enabled);
+  assert.equal(custom.webLimits.requestLimit,300);
+  assert.equal(custom.webLimits.rendererMemoryMiB,512);
+  const restored=appSettings(custom);
+  assert.deepEqual(restored.webLimits,custom.webLimits);
+  assert.deepEqual(validateAppSettings({lowUsageMode:false},custom).webLimits,custom.webLimits);
+  for(const input of [{lowUsageMode:1},{webLimits:null},{webLimits:{requestLimit:0}},{webLimits:{requestLimit:1.5}},{webLimits:{rendererMemoryMiB:Infinity}},{webLimits:{unknown:42}}])assert.throws(()=>validateAppSettings(input));
 });
 
 test('startup registration uses the current packaged executable without shell commands', () => {

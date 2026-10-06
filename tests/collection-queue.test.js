@@ -50,3 +50,14 @@ test('a settled job releases its slot before its caller starts the next job', as
   assert.equal(await queue.run(() => 1), 1);
   assert.equal(await queue.run(() => 2), 2);
 });
+
+test('live concurrency changes drain waiting jobs without cancelling or oversubscribing active work',async()=>{
+  const queue=new BoundedQueue({concurrency:1});
+  const releases=[],started=[];
+  const jobs=[0,1,2,3].map(id=>queue.run(signal=>{assert.equal(signal.aborted,false);started.push(id);return new Promise(resolve=>{releases[id]=resolve;});}));
+  assert.deepEqual(started,[0]);queue.setConcurrency(3);assert.deepEqual(started,[0,1,2]);
+  queue.setConcurrency(1);releases[0](0);releases[1](1);await turn();assert.deepEqual(started,[0,1,2]);
+  releases[2](2);await turn();assert.deepEqual(started,[0,1,2,3]);releases[3](3);
+  assert.deepEqual(await Promise.all(jobs),[0,1,2,3]);assert.equal(queue.activeCount,0);
+  assert.throws(()=>queue.setConcurrency(0));
+});

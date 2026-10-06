@@ -14,18 +14,24 @@ function render(state) {
   document.querySelector('.floating-panel').setAttribute('aria-label',t('资源进度'));
   const settings = validateFloatingSettings(floatingSettings);
   applyFloatingStyle(document.documentElement, settings);
-  const present = new Set();
-  for (const source of sources) {
-    present.add(source.id);
+  const present = new Set(sources.map(source => source.id));
+  for (const [id, row] of tracks) if (!present.has(id)) { row.remove(); tracks.delete(id); }
+  if (sources.length) rows.querySelector('.floating-placeholder')?.remove();
+  for (const [index, source] of sources.entries()) {
     let row = tracks.get(source.id);
     if (!row) { row = createFloatingRow(document, source); tracks.set(source.id, row); }
-    renderFloatingRow(row, source, settings); rows.append(row);
+    // Keep live rows attached during value updates: reparenting animated rows
+    // invalidates their layout and the transparent window's composited surface.
+    if (rows.children[index] !== row) rows.insertBefore(row, rows.children[index] || null);
+    renderFloatingRow(row, source, settings);
   }
-  for (const [id, row] of tracks) if (!present.has(id)) { row.remove(); tracks.delete(id); }
-  rows.querySelector('.floating-placeholder')?.remove();
   if (!sources.length) {
-    const placeholder = document.createElement('div'); placeholder.className = 'floating-track floating-placeholder';
-    placeholder.setAttribute('aria-label', t('尚未添加数据源')); rows.append(placeholder);
+    let placeholder = rows.querySelector('.floating-placeholder');
+    if (!placeholder) {
+      placeholder = document.createElement('div'); placeholder.className = 'floating-track floating-placeholder';
+      rows.append(placeholder);
+    }
+    placeholder.setAttribute('aria-label', t('尚未添加数据源'));
   }
 }
 window.addEventListener('language-change',()=>{if(latest)render({...latest,language:undefined});});

@@ -57,7 +57,7 @@ export const staticMessages = {
   '监控': 'Monitoring',
   '正常模式': 'Normal mode',
   '测试模式': 'Test mode',
-  '首版预览 · 0.1.0': 'Preview · 0.1.0',
+  '预览版': 'Preview',
   '查看实时数据，处理采集状态。': 'View live data and manage monitoring status.',
   '＋ 添加数据源': '＋ Add data source',
   '添加数据源': 'Add data source',

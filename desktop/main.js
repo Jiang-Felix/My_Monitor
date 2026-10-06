@@ -23,6 +23,7 @@ import {EventEmitter} from 'node:events';
 import {TrayInteractions,systemDoubleClickTime} from './tray-interactions.js';
 import {StateTransactions} from '../core/state-transactions.js';
 import {hasSensitiveUrl} from '../core/sensitive-url.js';
+import {floatingSnapshot as displaySnapshot} from '../core/floating-snapshot.js';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const uiFile = join(root, 'ui', 'index.html');
@@ -37,10 +38,35 @@ if (smoke) {
 }
 const localWindows = new Set();
 let mainWindow, floatingWindow, tray, monitor, store, web, scheduler;
+let dashboardActive=true;
+let dashboardIdleTimer,dashboardView=null,dashboardGeometry=null;
+const dashboardIdleDelay=smoke&&process.argv.includes('--empty-memory-only')&&!process.argv.includes('--real-idle-delay')?1000:15000;
+function cancelDashboardIdle(){clearTimeout(dashboardIdleTimer);dashboardIdleTimer=null;}
+function scheduleDashboardIdle(){
+  cancelDashboardIdle();
+  const window=mainWindow;
+  const eligible=()=>window&&!window.isDestroyed()&&!window.isVisible()&&!window.isMinimized()&&!quitting&&!mutationBusy&&![...monitor.sources.values()].some(source=>source.enabled!==false)&&!floatingWindow&&!provisionalIds.size&&web.windows.size===0;
+  if(!eligible())return;
+  dashboardIdleTimer=setTimeout(async()=>{
+    dashboardIdleTimer=null;
+    if(!eligible())return;
+    try{
+      const view=await withDeadline(window.webContents.executeJavaScript('window.dashboardLifecycle?.capture()'),1000,'Dashboard state unavailable');
+      if(!eligible()||!view?.clean)return;
+      dashboardView=view;
+      const bounds=window.getNormalBounds();
+      // Do not accumulate native frame/DPI rounding on successive recreations.
+      if(!dashboardGeometry||Object.keys(bounds).some(key=>Math.abs(bounds[key]-dashboardGeometry.bounds[key])>3))dashboardGeometry={bounds,maximized:window.isMaximized()};
+      else dashboardGeometry.maximized=window.isMaximized();
+      dashboardActive=false;window.destroy();
+    }catch{/* Keep the window if state capture is unavailable; never lose a draft. */}
+  },dashboardIdleDelay);
+}
 let tokens = Object.create(null), ready = false, quitting = false, readOnly = false, storageError = '';
 let transactions,mutationBusy=false,broadcastTimer,resourceTimer;
 const provisionalIds=new Set();
 let floatingDragging=false, fittingFloating=false, floatingMoveTimer;
+let floatingLayoutKey=null;
 let floatingPosition=null;
 let appSettings=restoreAppSettings(), launchAtLogin=false, startupPreference;
 let trayEvents,trayInteractions;
@@ -64,9 +90,12 @@ function broadcast() {
 function broadcastNow() {
   if(quitting)return;
   fitFloating();
-  const data = snapshot();
-  for (const window of localWindows) if (!window.isDestroyed()) window.webContents.send('monitor:update', data);
+  for (const window of localWindows) if (!window.isDestroyed()) {
+    if(window===floatingWindow)window.webContents.send('monitor:update',floatingSnapshot());
+    else if(dashboardActive)window.webContents.send('monitor:update',snapshot());
+  }
 }
+function floatingSnapshot(){return displaySnapshot(monitor.snapshot(),floatingSettings,getLanguage());}
 async function persist(throwOnError = false) {
   if (!ready || readOnly) return;
   if(mutationBusy){checkpoint?.schedule();return;}
@@ -75,6 +104,16 @@ async function persist(throwOnError = false) {
 }
 function storedState(overrides={}) {
   return {sources:monitor.snapshot(),tokens,alerts:alerts.serialize(),floatingSettings,floatingPosition,appSettings,language:getLanguage(),...overrides};
+}
+function applyWebResourceSettings() {
+  const retry=[...web.resourceErrors.keys()];
+  if(!web.configureResources(appSettings))return;
+  clearInterval(resourceTimer);resourceTimer=null;
+  if(!smoke&&appSettings.lowUsageMode)resourceTimer=setInterval(()=>{
+    if(!quitting)web.checkResources(app.getAppMetrics());
+  },web.checkIntervalMs);
+  // Release a resource cooldown without disturbing paused or healthy sources.
+  if(ready&&!readOnly&&!quitting)for(const id of retry)void monitor.refresh(id);
 }
 function requireSecretStorage() {
   if(!safeStorage.isEncryptionAvailable()||(process.platform==='linux'&&safeStorage.getSelectedStorageBackend()==='basic_text'))throw new Error('系统加密不可用，无法安全保存 Token');
@@ -97,6 +136,7 @@ async function cleanupSource(id,createProfile=false){
   finally{clearTimeout(timer);}
 }
 function createWindow(floating = false) {
+  if(floating)floatingLayoutKey=null;
   const area = floating ? screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea : null;
   const size = floating ? floatingSize() : null;
   const placement = floating ? floatingPlacement(floatingPosition,size,screen.getAllDisplays().map(display=>display.workArea),area) : null;
@@ -105,7 +145,7 @@ function createWindow(floating = false) {
       ...placement, minWidth: 1, minHeight: 1, frame: false, transparent: true,
       resizable: false, minimizable: false, maximizable: false, fullscreenable: false,
       hasShadow: false, roundedCorners: true, thickFrame: false, skipTaskbar: true
-    } : { width: 1260, height: 820, minWidth: 760, minHeight: 520 }),
+    } : { ...(dashboardGeometry?.bounds||{width:1260,height:820}), minWidth: 760, minHeight: 520 }),
     title: floating ? t('My Monitor · 浮窗') : 'My Monitor',
     icon:statusIcon(),
     backgroundColor: floating ? '#00000000' : themeById(appSettings.theme).colors.bg, show: floating ? false : !smoke, alwaysOnTop: floating,
@@ -133,13 +173,24 @@ function createWindow(floating = false) {
   window.webContents.on('will-attach-webview', event => event.preventDefault());
   window.on('closed', () => {
     localWindows.delete(window);
-    if (floating && floatingWindow === window) { clearTimeout(floatingMoveTimer); floatingDragging=false; floatingWindow = null; updateTrayMenu(); if (!quitting) broadcast(); }
+    if(!floating&&mainWindow===window)mainWindow=null;
+    if (floating && floatingWindow === window) { clearTimeout(floatingMoveTimer); floatingDragging=false; floatingLayoutKey=null; floatingWindow = null; updateTrayMenu(); if (!quitting) {broadcast();scheduleDashboardIdle();} }
   });
   window.webContents.on('render-process-gone',()=>{
     if(window.isDestroyed()||quitting)return;
     window.destroy();
   });
-  if(!floating)window.on('close',event=>{if(!quitting&&tray){event.preventDefault();window.hide();}});
+  if(!floating){
+    dashboardActive=true;
+    const activity=active=>{
+      if(window.isDestroyed()||quitting)return;
+      dashboardActive=active;window.webContents.send('monitor:activity',active);
+      if(active)window.webContents.send('monitor:update',snapshot());
+    };
+    window.on('hide',()=>{activity(false);scheduleDashboardIdle();});window.on('minimize',()=>{cancelDashboardIdle();activity(false);});
+    window.on('show',()=>{cancelDashboardIdle();activity(true);});window.on('restore',()=>{cancelDashboardIdle();activity(true);});
+    window.on('close',event=>{if(!quitting&&tray){event.preventDefault();window.hide();}});
+  }
   void window.loadFile(floating ? floatingFile : uiFile).catch(error => { if (!closing && !window.isDestroyed()) console.error('窗口加载失败:', error.message); });
   return window;
 }
@@ -150,9 +201,14 @@ function rememberFloatingPosition(window=floatingWindow){
     floatingPosition=position;if(ready&&!readOnly)checkpoint?.schedule();
   }
 }
-function showMain() {
-  if (!mainWindow || mainWindow.isDestroyed()) mainWindow = createWindow();
+function showMain(page) {
+  cancelDashboardIdle();
+  const target=['data','alarms','floating','settings'].includes(page)?page:null;
+  const restoring=!mainWindow||mainWindow.isDestroyed();
+  if(restoring&&target)dashboardView={...dashboardView,page:target};
+  if (!mainWindow || mainWindow.isDestroyed()) {mainWindow = createWindow();if(dashboardGeometry){mainWindow.setBounds(dashboardGeometry.bounds);if(dashboardGeometry.maximized)mainWindow.maximize();}}
   mainWindow.show(); if (mainWindow.isMinimized()) mainWindow.restore(); mainWindow.focus();
+  if(!restoring&&target)mainWindow.webContents.send('monitor:page',target);
 }
 function pinFloating(window) {
   // Electron's default Windows level moves the window behind the taskbar. If the taskbar
@@ -173,18 +229,21 @@ function fitFloating(force=false) {
   if(force){floatingDragging=false;clearTimeout(floatingMoveTimer);}
   if (!floatingWindow || floatingWindow.isDestroyed() || floatingDragging || fittingFloating) return;
   const bounds = floatingWindow.getBounds();
-  const size=floatingSize();
-  // Windows display scaling may round native sizes by one DIP; do not repeatedly resize those.
-  for(const key of ['width','height'])if(Math.abs(size[key]-bounds[key])<=1)size[key]=bounds[key];
-  const next = placeFloating({...bounds,...size},screen.getAllDisplays().map(display=>display.workArea));
-  // Allow one-DIP coordinate/size discrepancies: repositioning can round the native size again.
-  if (Object.keys(next).some(key => Math.abs(next[key]-bounds[key])>1)) {
+  const size=floatingSize(),displays=screen.getAllDisplays();
+  const layoutKey=JSON.stringify([size,screen.getDisplayMatching(bounds).id,displays.map(display=>[display.id,display.scaleFactor,display.workArea])]);
+  const layoutChanged=layoutKey!==floatingLayoutKey;
+  // Native DIP/pixel conversion can round BOTH dimensions whenever one changes.
+  // Remember the requested layout, never feed a partly rounded native size back
+  // as the next resize target. Numeric updates preserve the existing native size.
+  const next=placeFloating(layoutChanged?{...bounds,...size}:bounds,displays.map(display=>display.workArea));
+  if (Object.keys(next).some(key => Math.abs(next[key]-bounds[key])>(layoutChanged?0:1))) {
     fittingFloating=true;
     try{
       if(next.width===bounds.width && next.height===bounds.height)floatingWindow.setPosition(next.x,next.y);
       else floatingWindow.setBounds(next);
     }finally{fittingFloating=false;}
   }
+  floatingLayoutKey=layoutKey;
 }
 function setFloating(open) {
   if (open) showFloating();
@@ -212,7 +271,7 @@ function handle(channel, action) {
     const url = event.senderFrame?.url;
     const authorized = [...localWindows].some(window => !window.isDestroyed() && window.webContents === event.sender);
     if (!authorized || event.senderFrame !== event.sender.mainFrame || !uiUrls.has(url)) return { ok: false, error: '不允许此请求' };
-    try { return { ok: true, data: await action(input) }; }
+    try { return { ok: true, data: await action(input,event) }; }
     catch (error) { return { ok: false, error: error.message || '操作失败，请重试' }; }
   });
 }
@@ -228,10 +287,11 @@ async function addDemo() {
   },candidate=>{for(const item of candidate.additions)monitor.upsert(item);void monitor.refreshAll();return snapshot();});
 }
 function registerHandlers() {
-  handle('snapshot', () => snapshot());
+  handle('snapshot', (_input,event) => event.sender===floatingWindow?.webContents?floatingSnapshot():{...snapshot(),dashboardView});
   handle('appSettings', async input => {
     requireWritable();return transactions.run(()=>{const settings=validateAppSettings(input,appSettings);return {settings,state:storedState({appSettings:settings})};},candidate=>{
       appSettings=candidate.settings;trayInteractions?.cancel();
+      applyWebResourceSettings();
       if(mainWindow&&!mainWindow.isDestroyed())mainWindow.setBackgroundColor(themeById(appSettings.theme).colors.bg);
       broadcast();return snapshot();
     });
@@ -336,7 +396,7 @@ else {
     notificationService = new DesktopNotifications({ enabled: !smoke, onDelivery: (id, status, message) => {
       alerts.updateDelivery(id, status, message); if (ready && !quitting) { broadcast(); checkpoint?.schedule(); }
     }, onClick: () => {
-      showMain(); mainWindow.webContents.send('monitor:page', 'alarms');
+      showMain('alarms');
     } });
     notificationInfo = await notificationService.init();
     // Read registration after notification initialization establishes our Windows app identity.
@@ -367,6 +427,7 @@ else {
       const cleanupController=new AbortController();
       await withDeadline(web.cleanupOrphans([...monitor.sources.keys()],app.getPath('userData'),{signal:cleanupController.signal}),5000,'临时登录信息清理超时').catch(()=>{cleanupController.abort();storageError='临时登录信息清理未完成，请退出软件后重试';});
     }
+    applyWebResourceSettings();
     ready = true;
     if (!readOnly) await transactions.run(()=>({state:storedState()}),()=>{}).catch(()=>{storageError='配置保存失败，请检查磁盘空间与系统凭证存储。';});
     registerHandlers();
@@ -379,7 +440,6 @@ else {
       updateTrayMenu();
       globalShortcut.register('CommandOrControl+Alt+M', showMain);
       scheduler = setInterval(() => { if (!readOnly) monitor.tick(); }, 250);
-      resourceTimer=setInterval(()=>{if(!quitting)web.checkResources(app.getAppMetrics());},5000);
       if (!readOnly) void monitor.refreshAll();
     }
     trayEvents=smoke?new EventEmitter():tray;
@@ -391,13 +451,13 @@ else {
     if(appSettings.floatingOnStartup)showFloating();
     if (smoke) {
       const { runSmoke } = await import('../scripts/electron-smoke.mjs');
-      await runSmoke({ mainWindow, monitor, web, persist, snapshot, showFloating, getFloating: () => floatingWindow, addDemo, root,trayEvents,doubleClickTime,store,httpSources,transactions,provisionalIds });
+      await runSmoke({ mainWindow, monitor, web, persist, snapshot, showFloating, getFloating: () => floatingWindow, addDemo, root,trayEvents,doubleClickTime,store,httpSources,transactions,provisionalIds,showMain,getMain:()=>mainWindow });
       app.quit();
     }
   }).catch(error => { console.error('启动失败:', smoke ? error.stack : error.message); app.exit(1); });
   app.on('before-quit', event => {
     if (!quitting) {
-      event.preventDefault(); quitting = true; clearInterval(scheduler);clearInterval(resourceTimer);clearTimeout(broadcastTimer);globalShortcut.unregisterAll();
+      event.preventDefault(); quitting = true;cancelDashboardIdle();clearInterval(scheduler);clearInterval(resourceTimer);clearTimeout(broadcastTimer);globalShortcut.unregisterAll();
       trayInteractions?.dispose();
       transactions?.close();monitor?.cancelAll();httpSources?.closeAll();notificationService?.dispose();
       fitFloating(true); rememberFloatingPosition();
@@ -407,5 +467,5 @@ else {
       void Promise.race([flush,new Promise(resolve=>{exitTimer=setTimeout(resolve,4000);})]).catch(()=>{}).finally(()=>{clearTimeout(exitTimer);app.quit();});
     }
   });
-  app.on('window-all-closed', () => { if (!tray) app.quit(); });
+  app.on('window-all-closed', () => { if (!tray && !(smoke&&process.argv.includes('--empty-memory-only'))) app.quit(); });
 }

@@ -39,6 +39,19 @@ node scripts/run-web-security.mjs
 node scripts/smoke.mjs --security-only
 ```
 
+0.2.0 的专项回归（顺序执行）：
+
+```powershell
+node scripts/smoke.mjs --low-usage-persistence-only
+node scripts/smoke.mjs --web-idle-only
+node scripts/smoke.mjs --idle-memory-only
+node scripts/smoke.mjs --empty-memory-only --empty-memory-check
+node scripts/smoke.mjs --empty-memory-only --real-idle-delay
+node scripts/smoke.mjs --floating-stability-only --plain-floating
+```
+
+分别检查资源开关 / 阈值保存、网页登录会话回收保护、后台采集与告警 / 草稿、空待机回收及恢复、真实 15 秒回收延迟、Windows DPI 下浮窗更新稳定性。内存报告保存在忽略的 `artifacts/memory/`；空待机功能测试缩短内部延迟以加快回归，`--real-idle-delay` 验证正式延迟。不同进程、系统和测量口径的数值不直接比较，公开报告仅使用可复现的本机模拟场景。
+
 `check` 检查应用、脚本与测试的 JavaScript 语法。`test` 检查核心逻辑；`smoke` 启动本应用的 Electron 窗口，使用临时用户目录、本机模拟站点、替身托盘与启动设置，退出后清理临时目录。不会读取常规应用 profile；安全测试也使用模拟凭证。
 
 原生 GUI 测试应顺序运行，避免窗口 / 桌面合成干扰，不要同时启动多套 smoke。每轮有超时保护；测试输出写入被忽略的 `artifacts/`。不要在受保护的生产监控任务中用自己的真实账户做自动化压力测试。
@@ -62,7 +75,7 @@ npm run package
 node scripts/verify-package.mjs
 ```
 
-输出由 `package.json` 的版本决定，例如 `release/0.1.0/MyMonitor-win32-x64/`。打包脚本会重建 ICO，复用安装的 Electron 校验信息，包含运行源代码、README、项目许可证以及品牌素材，排除测试、设计文档、Git 元数据和 GitHub 配置。
+输出由 `package.json` 的版本决定，例如 `release/0.2.0/MyMonitor-win32-x64/`。打包脚本会重建 ICO，复用安装的 Electron 校验信息，包含运行源代码、README、项目许可证以及品牌素材，排除测试、设计文档、Git 元数据和 GitHub 配置。
 
 `verify-package` 比较 ASAR 内的运行文件与源码 SHA-256，并核对运行入口、版本、许可证、作者、仓库元数据。原生浮窗校验：
 
@@ -84,4 +97,4 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release.ps1
 
 CI 权限只读，使用固定 SHA 的官方 checkout / setup-node；不包含发布令牌、不自动上传安装包或更改远端仓库。依赖更新通过 Dependabot PR 提议，仍需测试和人工审阅。
 
-应用的凭证存储、网络限制和本地备份不能因调试方便而移除。详细约束见 [SECURITY](../SECURITY.md)。
+应用的凭证存储、权限 / IPC 校验和本地备份不能因调试方便而移除；网页预算遵循保存的低占用模式选择，HTTP 预算独立保留。详细约束见 [SECURITY](../SECURITY.md)。

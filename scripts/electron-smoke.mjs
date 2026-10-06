@@ -35,7 +35,22 @@ async function until(predicate, label, timeout = 12000) {
   while (Date.now() < deadline) { if (await predicate()) return; await sleep(70); }
   throw new Error(`Timeout: ${label}`);
 }
-export async function runSmoke({ mainWindow, monitor, web, persist, showFloating, getFloating, root,trayEvents,doubleClickTime,store,httpSources,transactions,provisionalIds }) {
+export async function runSmoke({ mainWindow, monitor, web, persist, showFloating, getFloating, root,trayEvents,doubleClickTime,store,httpSources,transactions,provisionalIds,showMain,getMain }) {
+  if(process.argv.includes('--empty-memory-only')){
+    const {runEmptyMemorySmoke}=await import('./empty-memory-smoke.mjs');await runEmptyMemorySmoke({mainWindow,monitor,getFloating,root,trayEvents,doubleClickTime,showMain,getMain});return;
+  }
+  if(process.argv.includes('--web-idle-only')){
+    const {runWebIdleSmoke}=await import('./web-idle-smoke.mjs');await runWebIdleSmoke(web);return;
+  }
+  if(process.argv.includes('--idle-memory-only')){
+    const {runIdleMemorySmoke}=await import('./idle-memory-smoke.mjs');await runIdleMemorySmoke({mainWindow,monitor,web,getFloating,root});return;
+  }
+  if(process.argv.includes('--floating-stability-only')){
+    const {runFloatingStabilitySmoke}=await import('./floating-stability-smoke.mjs');await runFloatingStabilitySmoke({mainWindow,monitor,getFloating,root});return;
+  }
+  if(['--low-usage-only','--low-usage-write','--low-usage-read'].some(flag=>process.argv.includes(flag))){
+    const {runLowUsageSmoke}=await import('./low-usage-smoke.mjs');await runLowUsageSmoke({mainWindow,web,store,root});return;
+  }
   if(process.argv.includes('--docs-media-only')){
     const {runDocsMediaSmoke}=await import('./docs-media-smoke.mjs');
     await runDocsMediaSmoke({mainWindow,monitor,getFloating,root});return;

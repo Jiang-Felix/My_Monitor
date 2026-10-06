@@ -23,9 +23,10 @@ test('missing and partial settings use the visible 20 by 300 default and preserv
 test('renderer keeps default bars and safely renders optional labels and retained samples', async () => {
   const { validateFloatingSettings, DEFAULT_FLOATING_SETTINGS } = await load();
   class Element {
-    constructor() { this.children = []; this.dataset = {}; this.style = { setProperty(key, value) { this[key] = value; } }; this.attributes = {}; }
-    append(...children) { for (const child of children) { child.remove(); child.parent = this; this.children.push(child); } }
-    remove() { if (this.parent) this.parent.children = this.parent.children.filter(child => child !== this); }
+    constructor() { this.children = []; this.dataset = {}; this.style = { setProperty(key, value) { this[key] = value; } }; this.attributes = {}; this.insertions = 0; }
+    append(...children) { for (const child of children) this.insertBefore(child, null); }
+    insertBefore(child, before) { if (child === before) return; child.remove(); child.parent = this; this.children.splice(before ? this.children.indexOf(before) : this.children.length, 0, child); this.insertions++; }
+    remove() { if (this.parent) { this.parent.children = this.parent.children.filter(child => child !== this); this.parent = null; } }
     setAttribute(key, value) { this.attributes[key] = value; }
     removeAttribute(key) { delete this.attributes[key]; }
     querySelector(selector) { return this.children.find(child => child.className?.includes(selector.slice(1))) || this.children.map(child => child.querySelector(selector)).find(Boolean); }
@@ -68,6 +69,17 @@ test('renderer keeps default bars and safely renders optional labels and retaine
   assert.equal(rows.querySelector('.floating-percent').textContent, '--');
   update({ sources: [{ ...source, sample: null }], floatingSettings: { showAmount: true } });
   assert.equal(rows.querySelector('.floating-amount').textContent, '--');
+  assert.equal(rows.insertions,1,'numeric, settings and language updates never detach existing rows');
+  const first=rows.children[0],second={...source,id:'2'},third={...source,id:'3'};
+  update({sources:[source,second,third]});
+  const secondRow=rows.children[1],thirdRow=rows.children[2];
+  update({sources:[third,source,second]});
+  assert.deepEqual(rows.children,[thirdRow,first,secondRow],'real source reordering preserves the same row objects');
+  update({sources:[third,second]});
+  assert.deepEqual(rows.children,[thirdRow,secondRow],'removing a source leaves other rows intact');
+  update({sources:[]});const placeholder=rows.children[0],insertions=rows.insertions;
+  update({sources:[]});assert.equal(rows.children[0],placeholder);assert.equal(rows.insertions,insertions,'empty updates keep one stable placeholder');
+  update({sources:[source]});assert.equal(rows.children.length,1);assert.equal(rows.children[0].querySelector('.floating-track').dataset.id,'1');
 });
 
 test('numeric form strings and valid boundary values are accepted', async () => {

@@ -2,12 +2,13 @@ import { t, getLanguage, setLanguage, translateMessage, localeCode } from '../co
 import { initializeStaticLanguage } from './localized-dom.js';
 import { parseFixed, progress } from '../core/metrics.js';
 import { resourceCategory } from '../core/resource-status.js';
-import { initializeWorkspace, renderWorkspace } from './workspace.js';
+import { initializeWorkspace, renderWorkspace, setWorkspaceActive,dashboardWorkspaceState,restoreDashboardWorkspace } from './workspace.js';
 import { cardLayout } from './card-layout.js';
 import { initializeSourceCadence } from './source-cadence.js';
 import { initializeFormChoices } from './form-choices.js';
 import {applyTheme,initializeThemes} from './themes.js';
 import {hasSensitiveUrl} from '../core/sensitive-url.js';
+import {initializeWebResourceControls} from './web-resource-controls.js';
 
 document.documentElement.lang = getLanguage();
 const staticLanguage = initializeStaticLanguage(document);
@@ -18,9 +19,11 @@ let state = { sources: [], storageError: '' }, filter = 'all', kind = 'web', edi
 let viewMode = 'card';
 let testMode = false;
 let savingAppSettings=false;
+let dashboardActive=true;
 let pendingTheme=null;
 const pendingSources=new Set();
-const preferenceControls=[['floating-on-startup','floatingOnStartup'],['tray-single-click','traySingleClick'],['tray-double-click','trayDoubleClick']];
+const preferenceControls=[['floating-on-startup','floatingOnStartup'],['tray-single-click','traySingleClick'],['tray-double-click','trayDoubleClick'],['low-usage-mode','lowUsageMode']];
+const webResourceControls=initializeWebResourceControls($('#web-limits-form'),webLimits=>saveStartupPreference('appSettings',{webLimits}));
 try{applyTheme(localStorage.getItem('monitorTheme'));}catch{applyTheme();}
 const themeSelector=initializeThemes($('#theme-options'),theme=>saveStartupPreference('appSettings',{theme}));
 try { const saved = localStorage.getItem('resourceViewMode'); if (['card', 'list'].includes(saved)) viewMode = saved; } catch {}
@@ -110,17 +113,20 @@ function card(source) {
   </article>`;
 }
 function render() {
+  if(!dashboardActive)return;
   const theme=pendingTheme||state.appSettings?.theme;
   applyTheme(theme);themeSelector.render(theme,savingAppSettings||!!state.monitoringBlocked);
   $('#brand-icon').src=state.floatingOpen?'assets/mini-c.png':'assets/mini-w.png';
-  $('#app-version').textContent=state.version||'0.1.0';
+  $('#app-version').textContent=state.version||'0.2.0';
+  $('#sidebar-version').textContent=`${t('预览版')} · ${state.version||'0.2.0'}`;
   if(!savingAppSettings){
-    for(const [id,key] of preferenceControls)$('#'+id).checked=state.appSettings?.[key]!==false;
+    for(const [id,key] of preferenceControls)$('#'+id).checked=key==='lowUsageMode'?state.appSettings?.[key]===true:state.appSettings?.[key]!==false;
     $('#launch-at-login').checked=!!state.launchAtLogin;
   }
   for(const [id] of preferenceControls)$('#'+id).disabled=savingAppSettings||!!state.monitoringBlocked;
   $('#launch-at-login').disabled=savingAppSettings||!!state.monitoringBlocked||state.startupAvailable===false;
   $('#startup-availability').hidden=state.startupAvailable!==false;
+  webResourceControls.render(state.appSettings?.webLimits,savingAppSettings||!!state.monitoringBlocked);
   const sources = state.sources, issues = sources.filter(attention).length;
   $('#source-count').textContent = sources.length;
   $('#nav-count').textContent = sources.length;
@@ -223,8 +229,8 @@ async function saveStartupPreference(action,value) {
   savingAppSettings=true;setError('#app-settings-error','');
   for(const [id] of preferenceControls)$('#'+id).disabled=true;$('#launch-at-login').disabled=true;
   themeSelector.render(pendingTheme||state.appSettings?.theme,true);
-  try{update(await request(action,value));}
-  catch(error){setError('#app-settings-error',error.message);}
+  try{update(await request(action,value));return true;}
+  catch(error){setError('#app-settings-error',error.message);return false;}
   finally{savingAppSettings=false;pendingTheme=null;render();}
 }
 for(const [id,key] of preferenceControls)$('#'+id).addEventListener('change',event=>saveStartupPreference('appSettings',{[key]:event.target.checked}));
@@ -436,9 +442,25 @@ $('#delete-confirm').addEventListener('click', () => busy($('#delete-confirm'), 
 }));
 new ResizeObserver(resizeCards).observe($('#cards'));
 initializeWorkspace({ request, update, toast });
+// Only clean view preferences cross into the main process. Editor contents and
+// credentials never leave the existing renderer for idle window reclamation.
+window.dashboardLifecycle={capture:()=>{
+  const workspace=dashboardWorkspaceState();
+  return {...workspace,clean:workspace.clean&&!document.querySelector('dialog[open]')&&!savingAppSettings&&!pendingSources.size&&!discardingIds.size&&!webResourceControls.isDirty(),filter,viewMode,testMode,scrollY:window.scrollY};
+}};
 if (api) {
+  api.onActivity?.(active=>{dashboardActive=active;setWorkspaceActive(active);});
   api.onUpdate(update);
-  request('snapshot').then(update).catch(error => toast(error.message));
+  request('snapshot').then(data=>{
+    update(data);
+    const view=data.dashboardView;
+    if(view){
+      if(['card','list'].includes(view.viewMode))document.querySelector(`[data-view="${view.viewMode}"]`)?.click();
+      if(['all','normal','abnormal'].includes(view.filter))document.querySelector(`[data-filter="${view.filter}"]`)?.click();
+      testMode=!!view.testMode;applyTestMode();restoreDashboardWorkspace(view);
+      requestAnimationFrame(()=>window.scrollTo(0,view.scrollY||0));
+    }
+  }).catch(error => toast(error.message));
   setInterval(render, 30000);
 } else {
   state.storageError = '请通过桌面应用打开：在项目目录运行 npm start。'; render();

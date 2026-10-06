@@ -17,6 +17,18 @@ const tr = (message, values = {}) => t(message).replace(/\{(\w+)\}/g, (_, key) =
 const deliveries = { pending:'准备发送',requested:'已请求系统通知',shown:'已接收',failed:'通知发送失败',unsupported:'系统不支持通知',test:'测试模式',muted:'已静默' };
 let latest = {}, services, ruleId = null, floatingDirty = false, alertFilter='all';
 let alertFormControls, floatingPreview, floatingChoices;
+let workspaceActive=true;
+export function setWorkspaceActive(active){workspaceActive=active;floatingPreview?.setActive(active&&!$('#floating-page').hidden);}
+export function dashboardWorkspaceState(){
+  return {clean:!floatingDirty&&savingRules.size===0,page:document.querySelector('[data-page].active')?.dataset.page||'data',alertFilter,expandedCharts:[...document.querySelectorAll('#alert-list [data-rule-id]')].filter(node=>node.querySelector('details')?.open).map(node=>node.dataset.ruleId)};
+}
+export function restoreDashboardWorkspace(value){
+  if(!value)return;
+  if(['all','active','silent','paused'].includes(value.alertFilter))alertFilter=value.alertFilter;
+  showPage(value.page);
+  for(const node of document.querySelectorAll('#alert-list [data-rule-id]'))if(value.expandedCharts?.includes(node.dataset.ruleId))node.querySelector('details').open=true;
+  if(value.page==='alarms'&&latest.sources)renderWorkspace(latest);
+}
 const savingRules=new Set();
 function syncRuleControls(node) {
   const busy=savingRules.has(node.dataset.ruleId);
@@ -41,7 +53,7 @@ export function showPage(page) {
     button.classList.toggle('active',button.dataset.page===page);
     if (button.dataset.page===page) button.setAttribute('aria-current','page'); else button.removeAttribute('aria-current');
   }
-  floatingPreview?.setActive(page==='floating');
+  floatingPreview?.setActive(workspaceActive&&page==='floating');
   if (page==='alarms' && latest.sources) renderWorkspace(latest);
 }
 function fill(form, values) {

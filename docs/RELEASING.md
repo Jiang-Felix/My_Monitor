@@ -1,24 +1,82 @@
-# 首次上传与后续发布指南
+# 发布与仓库维护指南
 
-[返回 README](../README.md) · [版本更新记录](../CHANGELOG.md) · [v0.1.0 发布正文](releases/v0.1.0.md)
+[返回 README](../README.md) · [版本更新记录](../CHANGELOG.md) · [v0.2.0 发布正文](releases/v0.2.0.md)
+
+## 本次发布：v0.2.0
+
+远端已有 `main` 和 `v0.1.0`。本次新增低占用模式并优化浮窗 / 待机，因此提升次版本到 `0.2.0`；不要覆盖旧标签或附件。当前本地发行物是待提交源码生成的候选包，GitHub 尚需维护者发布。
+
+### 提交这轮变更
+
+在 `D:\Projects\Data-Monitor` 执行：
+
+```powershell
+git status --short
+git diff --stat
+git add .
+git diff --cached --check
+git diff --cached --stat
+git diff --cached --name-only
+git commit --file docs/releases/v0.2.0-commit.txt
+git push origin main
+```
+
+应提交源码、测试、版本 / 锁文件、公开文档及模拟截图；发行物、测试输出和用户数据继续由 `.gitignore` 排除。不要使用 `git add -f`。`origin` 已配置，无需再添加。如果 `main` 要求 PR，提交前用 `git switch -c release/v0.2.0` 创建分支，推送该分支并合并 PR。
+
+提交后确认 `git status --porcelain` 没有输出，并到 Actions 确认该提交的 `Windows checks` / `check-and-test` 成功。如果提交后修改了源码或媒体，重新提交、重建和校验。
+
+### 复核包与标签
+
+```powershell
+node scripts/verify-package.mjs
+node scripts/run-packaged-floating.mjs
+Get-FileHash -Algorithm SHA256 .\release\0.2.0\MyMonitor-v0.2.0-windows-x64.zip
+git log -1 --oneline
+git tag -a v0.2.0 -m "My Monitor v0.2.0 web compatibility and idle memory preview"
+git push origin v0.2.0
+```
+
+假设已推送与包一致的提交，且 `v0.2.0` 尚不存在。使用 PR 时合并后切回 `main`、`git pull --ff-only`，再校验 / 重建并打标签，使标签指向实际发布提交。ZIP 哈希应与 `release/0.2.0/SHA256SUMS.txt` 一致。
+
+若需从干净提交重建，先将候选 ZIP 移到忽略的 `artifacts/` 下保留，再运行 `npm run package`、`node scripts/verify-package.mjs` 和 `./scripts/release.ps1`。ZIP 脚本不覆盖已有压缩包；不要覆盖正在运行的软件目录。
+
+### 在 GitHub 发布
+
+打开 **Releases → Draft a new release**，选择 `v0.2.0`：
+
+1. 标题：`v0.2.0 · 网页兼容性与待机优化`。
+2. 正文：复制 [v0.2.0.md](releases/v0.2.0.md)，核对升级提示及验证范围。
+3. 上传 `release/0.2.0/MyMonitor-v0.2.0-windows-x64.zip` 和 `SHA256SUMS.txt`。
+4. 勾选 **This is a pre-release**；先保存草稿核对，再发布。`0.x` 不会自动设置 GitHub 预览状态。
+5. 发布后下载附件核对 SHA-256，检查 README、版本徽章、图片、使用说明及 Release 链接。
+
+GitHub 自动提供的 Source code ZIP / tar.gz 是源码，用户应下载 Windows 附件。如果开启不可变发布，应在草稿中上传齐全；发布后不能替换附件或移动标签。[GitHub Release 官方说明](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository)。
+
+### 发布后维护
+
+- 保留 `v0.1.0` 历史 Release 和标签；本地旧发行物归档到忽略的 `artifacts/release-archive/`，`release/` 保留当前候选版本。
+- 建立 `v0.2.0` milestone，关闭确实解决的已有问题并注明版本；新问题放进 `v0.2.1`（修复）或 `v0.3.0`（功能）。没有对应 Issue 时无需补造。
+- 缺陷报告提供版本、复现、低占用模式、来源数量和窗口状态；截图脱敏。内存报告注明口径和等待时间，安全问题走私密报告。
+- 在 `CHANGELOG.md` 的 Unreleased 中积累下一版变更；发布时同步版本 / 锁文件、README、使用说明、发布正文和媒体。已公开程序变更要发新版本，不能覆盖旧标签。
+- Generate release notes 收集合并的 PR；本次直接提交仍以手写正文为准，不把空白自动说明当作更新记录。[GitHub 自动发布说明](https://docs.github.com/en/repositories/releasing-projects-on-github/automatically-generated-release-notes)。
 
 ## 版本编号规则
 
 版本以 `package.json` 为准，`package-lock.json` 保持一致，UI 从应用版本读取。Git 标签增加 `v` 前缀，发布附件包含相同版本。
 
-| 用途 | 首次版本示例 |
+| 用途 | 当前版本示例 |
 | --- | --- |
-| 应用与 npm manifest | `0.1.0` |
-| Git 标签 | `v0.1.0` |
-| GitHub Release 名称 | `v0.1.0 · 首个公开预览版` |
-| 本地发行目录 | `release/0.1.0/` |
-| 用户下载附件 | `MyMonitor-v0.1.0-windows-x64.zip` |
+| 应用与 npm manifest | `0.2.0` |
+| Git 标签 | `v0.2.0` |
+| GitHub Release 名称 | `v0.2.0 · 网页兼容性与待机优化` |
+| 本地发行目录 | `release/0.2.0/` |
+| 用户下载附件 | `MyMonitor-v0.2.0-windows-x64.zip` |
 
-采用 [Semantic Versioning](https://semver.org/) 的 `MAJOR.MINOR.PATCH` 结构：补丁修复用 `0.1.1`，新增功能用 `0.2.0`；`0.x` 为早期开发阶段，破坏兼容的变化也提升次版本并给出迁移说明。达到明确稳定兼容承诺后发布 `1.0.0`；此后破坏兼容提升主版本。未来同一版本的候选版可用 `0.2.0-beta.1`、`0.2.0-rc.1`，各文件和标签同步。
+采用 [Semantic Versioning](https://semver.org/) 的 `MAJOR.MINOR.PATCH` 结构：当前版本之后补丁修复用 `0.2.1`，新增功能用 `0.3.0`；`0.x` 为早期开发阶段，破坏兼容的变化也提升次版本并给出迁移说明。达到明确稳定兼容承诺后发布 `1.0.0`；此后破坏兼容提升主版本。未来同一版本的候选版可用 `0.3.0-beta.1`、`0.3.0-rc.1`，各文件和标签同步。
 
-首次应用已有 `0.1.0`，准备文档不改变版本。建议在 GitHub 勾选 **This is a pre-release**；`0.x` 编号不会自动代替该选项。没有发布过的内部构建不需要每次递增；已经公开的版本和标签不能移到别的提交，修复后发布新版本。
+当前应用版本为 `0.2.0`，下一次补丁可用 `0.2.1`，新增功能可用 `0.3.0`。建议在 GitHub 勾选 **This is a pre-release**；`0.x` 编号不会自动代替该选项。没有发布过的内部构建不需要每次递增；已经公开的版本和标签不能移到别的提交，修复后发布新版本。
 
-## 第一次 Git 提交
+## 历史参考：第一次 Git 提交
 
 ### 1. 在 GitHub 创建空仓库
 
@@ -94,7 +152,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release.ps1
 
 本地 `release/` 可按需清理旧构建；已发布 GitHub Release、标签和源码历史用于保留公开版本，不随本地清理删除。
 
-## GitHub Release：发布 v0.1.0
+## 历史参考：首次发布 v0.1.0
 
 先确认 `main` 的 CI 通过，提交与本地包对应。在本地标记该提交：
 
@@ -124,7 +182,7 @@ Get-FileHash -Algorithm SHA256 .\MyMonitor-v0.1.0-windows-x64.zip
 
 在仓库 **Settings → General → Features** 开启 Issues。提交到默认分支后，`.github/ISSUE_TEMPLATE/` 会提供缺陷 / 功能表单；用户点击 New issue 验证表单是否出现。
 
-在 **Issues → Labels** 检查 `bug`、`enhancement`；可另建 `question`、`documentation`、`good first issue`、`help wanted`、`security`。模板自动标签只对已存在标签生效。使用 Milestones 建立 `v0.1.1` / `v0.2.0`，关联待修复 Issue，关闭时注明修复版本；Projects 看板和 Discussions 按实际需要开启即可。
+在 **Issues → Labels** 检查 `bug`、`enhancement`；可另建 `question`、`documentation`、`good first issue`、`help wanted`、`security`。模板自动标签只对已存在标签生效。使用 Milestones 建立 `v0.2.1` / `v0.3.0`，关联待修复 Issue，关闭时注明修复版本；Projects 看板和 Discussions 按实际需要开启即可。
 
 PR 模板及贡献规范已提供。给发布工作和每项修改关联 Issue / PR，正文用 `Fixes #编号` 仅在确实解决对应 Issue 时使用。不要在公开 Issue 报告安全漏洞详情。
 

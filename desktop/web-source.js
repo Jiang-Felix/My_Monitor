@@ -7,6 +7,7 @@ import { safeWebNavigation, canPickPage } from '../core/web-navigation.js';
 import { extractSample } from '../core/metrics.js';
 import { BoundedQueue } from '../core/collection-queue.js';
 import { bounded, cancelled, RollingBytes } from './web-limits.js';
+import {browserResourcePolicy} from '../core/web-resource-settings.js';
 import { readdir, lstat, realpath, rm } from 'node:fs/promises';
 import { resolve, join, relative, sep } from 'node:path';
 
@@ -27,26 +28,35 @@ export class WebSources {
     }
     for(const children of this.popups.values())for(const window of children)if(!window.isDestroyed())window.setTitle(t('My Monitor · 网站登录'));
   }
-  constructor({getIcon, maxResponseBytes=16*1024*1024, requestLimit=120, requestWindowMs=60000,
-    maxSourceBytes=64*1024*1024, maxTotalBytes=128*1024*1024, resourceCooldownMs=60000, maxRendererMemoryKiB=256*1024,
-    maxTotalRendererMemoryKiB=1024*1024,maxRendererCPU=60,cpuSamples=3,maxProfiles=128}={}) {
-    this.getIcon=getIcon;
+  constructor(options={}) {
+    this.getIcon=options.getIcon;
     this.windows = new Map(); this.jobs = new SourceJobs(); this.picking = new Set(); this.epochs = new Map();
     this.popups = new Map(); this.activity = new Map();
     this.livePages = new Map();
-    this.readTimeoutMs = 8000;
-    this.pickTimeoutMs = 10*60*1000;
-    this.navigationTimeoutMs = 20000;
-    this.queue = new BoundedQueue({concurrency:2,maxQueued:100});
     this.profiles=new Map();this.tasks=new Map();this.resourceErrors=new Map();this.shutdown=false;
-    this.maxResponseBytes=maxResponseBytes;this.requestLimit=requestLimit;this.requestWindowMs=requestWindowMs;
-    this.maxSourceBytes=maxSourceBytes;this.maxTotalBytes=maxTotalBytes;this.resourceCooldownMs=resourceCooldownMs;this.maxRendererMemoryKiB=maxRendererMemoryKiB;
-    this.maxTotalRendererMemoryKiB=maxTotalRendererMemoryKiB;this.maxRendererCPU=maxRendererCPU;this.cpuSamples=cpuSamples;this.highCPU=new Map();
-    this.totalBytes=new RollingBytes(requestWindowMs);
-    this.maxProfiles=maxProfiles;
+    this.highCPU=new Map();this.byteWatchers=new Map();
+    this.idleWindows=new Map();this.idleWindowDelayMs=options.idleWindowDelayMs??15000;
+    const policy=browserResourcePolicy(options.lowUsageMode,options.webLimits);
+    // Byte-sized overrides are used by isolated resource guard fixtures.
+    for(const key of Object.keys(policy))if(Object.hasOwn(options,key))policy[key]=options[key];
+    Object.assign(this,policy);this.resourcePolicy=JSON.stringify(policy);
+    this.totalBytes=new RollingBytes(this.requestWindowMs);
+    this.queue = new BoundedQueue({concurrency:this.concurrency,maxQueued:100});
+  }
+  configureResources(settings) {
+    const policy=browserResourcePolicy(settings?.lowUsageMode,settings?.webLimits),signature=JSON.stringify(policy);
+    if(signature===this.resourcePolicy)return false;
+    for(const dispose of [...this.byteWatchers.values()])dispose();
+    Object.assign(this,policy);this.resourcePolicy=signature;
+    this.resourceErrors.clear();this.highCPU.clear();this.totalBytes=new RollingBytes(this.requestWindowMs);
+    for(const state of this.profiles.values()){state.requests=[];state.bytes=new RollingBytes(this.requestWindowMs);}
+    this.queue.setConcurrency(this.concurrency);
+    for(const [id,parent] of this.windows)for(const window of [parent,...(this.popups.get(id)||[])])if(!window.isDestroyed())this.watchBytes(id,window.webContents);
+    return true;
   }
   async task(id, externalSignal, operation) {
     if(this.shutdown)throw cancelled();
+    this.cancelIdleRelease(id);
     this.checkProfileCapacity(id);
     const epoch=this.epochs.get(id)||0, controller=new AbortController();
     let tasks=this.tasks.get(id);if(!tasks){tasks=new Set();this.tasks.set(id,tasks);}tasks.add(controller);
@@ -78,16 +88,19 @@ export class WebSources {
     profile.webRequest.onBeforeRequest((details,callback)=>{
       let allowed=false;try{const url=new URL(details.url);allowed=['https:','wss:','data:','blob:','about:'].includes(url.protocol)||(['http:','ws:'].includes(url.protocol)&&['localhost','127.0.0.1','[::1]'].includes(url.hostname));}catch{}
       if(state.blocked||!allowed){callback({cancel:true});return;}
-      const now=Date.now();state.requests=state.requests.filter(time=>time>now-this.requestWindowMs);
-      if(state.requests.length>=this.requestLimit){callback({cancel:true});this.stopResource(id,'网页请求过于频繁，已停止该页面；请降低刷新频率或更换页面');return;}
-      state.requests.push(now);
+      const now=Date.now();
+      if(this.lowUsageMode){
+        state.requests=state.requests.filter(time=>time>now-this.requestWindowMs);
+        if(state.requests.length>=this.requestLimit){callback({cancel:true});this.stopResource(id,'网页请求过于频繁，已停止该页面；请降低刷新频率或更换页面');return;}
+        state.requests.push(now);
+      }
       const activity=this.activity.get(id);
       if(activity?.collecting&&details.resourceType==='xhr'){activity.pending.add(details.id);activity.lastChange=now;}
       callback({});
     });
     profile.webRequest.onHeadersReceived((details,callback)=>{
       const lengths=Object.entries(details.responseHeaders||{}).filter(([key])=>key.toLowerCase()==='content-length').flatMap(([,values])=>values);
-      if(state.blocked||lengths.some(value=>Number(value)>this.maxResponseBytes)){
+      if(state.blocked||(this.lowUsageMode&&lengths.some(value=>Number(value)>this.maxResponseBytes))){
         callback({cancel:true});if(!state.blocked)this.stopResource(id,'网页响应超过资源上限，已停止该页面');return;
       }
       callback({});
@@ -107,14 +120,17 @@ export class WebSources {
     if(entry)this.resourceErrors.delete(id);
   }
   watchBytes(id,contents) {
+    if(!this.lowUsageMode||this.byteWatchers.has(contents))return;
+    let watching=true;
     const resources=new Map(),debuggerApi=contents.debugger;
     try{debuggerApi.attach('1.3');}catch{this.stopResource(id,'无法启用网页资源保护，请重新打开页面');return;}
     const failedProtection=()=>{
-      if(contents.isDestroyed()||this.profiles.get(id)?.blocked)return;
+      if(!watching||!this.lowUsageMode||contents.isDestroyed()||this.profiles.get(id)?.blocked)return;
       const current=[this.windows.get(id),...(this.popups.get(id)||[])].some(window=>window&&!window.isDestroyed()&&window.webContents===contents);
       if(current)this.stopResource(id,'无法启用网页资源保护，请重新打开页面');
     };
     const message=(_event,method,params,sessionId)=>{
+      if(!watching||!this.lowUsageMode)return;
       if(method==='Target.attachedToTarget'){
         void debuggerApi.sendCommand('Network.enable',{},params.sessionId).catch(failedProtection);
         return;
@@ -128,7 +144,7 @@ export class WebSources {
         const size=previous+bytes;resources.set(requestKey,size);
         const state=this.profiles.get(id);if(!state||state.blocked)return;
         const sourceBytes=state.bytes.add(bytes),totalBytes=this.totalBytes.add(bytes);
-        if(size>this.maxResponseBytes||sourceBytes>this.maxSourceBytes||totalBytes>this.maxTotalBytes||resources.size>256)this.stopResource(id,'网页接收数据超过资源上限，已停止该页面；请降低刷新频率或更换页面');
+        if(size>this.maxResponseBytes||sourceBytes>this.maxSourceBytes||totalBytes>this.maxTotalBytes||resources.size>this.maxResources)this.stopResource(id,'网页接收数据超过资源上限，已停止该页面；请降低刷新频率或更换页面');
         if(method==='Network.loadingFinished')resources.delete(requestKey);
       } else if(method==='Network.loadingFailed'||method==='Network.webSocketClosed')resources.delete(requestKey);
     };
@@ -139,7 +155,13 @@ export class WebSources {
     void debuggerApi.sendCommand('Network.enable').catch(failedProtection);
     // Related workers and frames use the same source budgets. Never pause page execution.
     void debuggerApi.sendCommand('Target.setAutoAttach',{autoAttach:true,waitForDebuggerOnStart:false,flatten:true}).catch(failedProtection);
-    contents.once('destroyed',()=>{clearTimeout(detachTimer);debuggerApi.removeListener('message',message);debuggerApi.removeListener('detach',detached);resources.clear();});
+    const dispose=()=>{
+      watching=false;
+      clearTimeout(detachTimer);debuggerApi.removeListener('message',message);debuggerApi.removeListener('detach',detached);
+      contents.removeListener('destroyed',dispose);resources.clear();this.byteWatchers.delete(contents);
+      if(!contents.isDestroyed())try{debuggerApi.detach();}catch{}
+    };
+    this.byteWatchers.set(contents,dispose);contents.once('destroyed',dispose);
   }
   secureWindow(id, window, popup = false) {
     const contents = window.webContents;
@@ -150,7 +172,7 @@ export class WebSources {
       const parent = this.windows.get(id);
       // Background collection cannot create visible windows; login/selection can.
       const resident=this.windows.size+[...this.popups.values()].reduce((sum,children)=>sum+children.size,0);
-      if (!parent || parent.isDestroyed() || !parent.isVisible() || !safeWebNavigation(url, true) || (this.popups.get(id)?.size || 0) >= 4 || resident>=8) return { action: 'deny' };
+      if (!parent || parent.isDestroyed() || !parent.isVisible() || !safeWebNavigation(url, true) || (this.popups.get(id)?.size || 0) >= this.maxPopups || resident>=this.maxWindows) return { action: 'deny' };
       return {
         action: 'allow', outlivesOpener: false,
         overrideBrowserWindowOptions: {
@@ -179,12 +201,13 @@ export class WebSources {
   }
   getWindow(id, show = false) {
     if(this.shutdown)throw cancelled();
+    this.cancelIdleRelease(id);
     this.checkResource(id);
     let window = this.windows.get(id);
     if (!window || window.isDestroyed()) {
       let resident=this.windows.size;
       for(const children of this.popups.values())resident+=children.size;
-      if(resident>=8)throw error('最多同时打开 8 个网页窗口，请暂停或关闭其他网页后重试','resource');
+      if(resident>=this.maxWindows)throw error('网页窗口数量达到当前上限，请关闭其他网页，或在设置中关闭低占用模式、调整窗口上限','resource');
       const partition = `persist:source-${id}`;
       const state=this.profile(id),profile=state.profile;
       if(state.clearing)throw error('正在清理该数据源的登录信息，请稍后重试','resource');
@@ -196,6 +219,7 @@ export class WebSources {
       this.windows.set(id, window);
       this.secureWindow(id, window);
       window.on('closed', () => {
+        this.cancelIdleRelease(id);
         this.closePopups(id);
         if (this.windows.get(id) === window) {
           this.windows.delete(id); this.activity.delete(id); this.livePages.delete(id);
@@ -292,12 +316,41 @@ export class WebSources {
     if (this.picking.has(source.id)) throw error('正在选取元素，完成后再刷新', 'locator');
     if (this.popups.get(source.id)?.size) throw error('网站正在完成登录授权，请返回原窗口后手动刷新', 'auth');
     const epoch = this.epochs.get(source.id) || 0;
-    return this.task(source.id,signal,(taskSignal)=>this.jobs.run(source.id, source, () => {
+    try{return await this.task(source.id,signal,(taskSignal)=>this.jobs.run(source.id, source, () => {
       if ((this.epochs.get(source.id) || 0) !== epoch) throw error('数据源已删除', 'locator');
       return this.queue.run(()=>this.read(source,taskSignal),{signal:taskSignal}).catch(failure=>{
         throw taskSignal.aborted&&taskSignal.reason instanceof Error?taskSignal.reason:failure;
       });
-    }));
+    }));}finally{this.scheduleIdleRelease(source);}
+  }
+  cancelIdleRelease(id){const entry=this.idleWindows.get(id);if(entry){clearTimeout(entry.timer);this.idleWindows.delete(id);}}
+  scheduleIdleRelease(source){
+    this.cancelIdleRelease(source.id);
+    const window=this.windows.get(source.id);
+    if(this.shutdown||source.webUpdateMode==='live'||!window||window.isDestroyed()||window.isVisible())return;
+    const entry={window,timer:setTimeout(()=>{void this.releaseIdleWindow(source.id,entry);},this.idleWindowDelayMs)};
+    entry.timer.unref?.();this.idleWindows.set(source.id,entry);
+  }
+  async releaseIdleWindow(id,entry){
+    const {window}=entry;
+    const safe=()=>this.idleWindows.get(id)===entry&&!this.shutdown&&this.windows.get(id)===window&&!window.isDestroyed()&&!window.isVisible()&&!this.picking.has(id)&&!this.popups.get(id)?.size&&!this.tasks.has(id)&&!this.jobs.pending.has(id)&&!this.livePages.has(id);
+    try{
+      if(!safe())return;
+      const contents=window.webContents,origin=new URL(contents.getURL()).origin;
+      // Retain active workers' owning window and its attached resource guards.
+      if(Object.keys(contents.session.serviceWorkers.getAllRunning()).length)return;
+      // Closing a tab clears sessionStorage. Preserve pages that keep tab-local
+      // authentication in any frame, or have a cross-origin login history.
+      if(contents.navigationHistory.getAllEntries().some(item=>new URL(item.url).origin!==origin))return;
+      const frames=contents.mainFrame.framesInSubtree;
+      const empty=await bounded(()=>Promise.all(frames.map(frame=>frame.executeJavaScript('(()=>{try{return sessionStorage.length===0}catch{return false}})()'))),{timeoutMs:1000});
+      if(!safe()||!empty.length||empty.some(value=>value!==true))return;
+      // Release only the idle renderer. Its persistent session and workers remain
+      // intact; reload mode will navigate from scratch at its next scheduled check.
+      this.idleWindows.delete(id);this.windows.delete(id);this.activity.delete(id);this.highCPU.delete(id);
+      window.destroy();
+    }catch{/* A page that cannot be safely inspected simply remains resident. */}
+    finally{if(this.idleWindows.get(id)===entry)this.idleWindows.delete(id);}
   }
   async read(source,signal) {
     await bounded(()=>this.profile(source.id).stopping,{signal,timeoutMs:this.readTimeoutMs});
@@ -392,6 +445,7 @@ export class WebSources {
     for (const child of children || []) if (!child.isDestroyed()) child.destroy();
   }
   close(id,failure=cancelled()) {
+    this.cancelIdleRelease(id);
     if(!this.profiles.has(id)&&!this.tasks.has(id)&&!this.windows.has(id)&&!this.picking.has(id)&&!this.jobs.pending.has(id))return Promise.resolve();
     this.epochs.set(id,(this.epochs.get(id)||0)+1);
     const state=this.profiles.get(id);if(state)state.blocked=true;
@@ -432,6 +486,7 @@ export class WebSources {
     return Promise.allSettled([...new Set([...this.windows.keys(),...this.tasks.keys(),...this.profiles.keys()])].map(id=>this.close(id)));
   }
   checkResources(metrics) {
+    if(!this.lowUsageMode)return;
     const processes=new Map((metrics||[]).map(metric=>[metric.pid,metric]));
     const sourceUsage=[];
     for(const [id,parent] of this.windows){

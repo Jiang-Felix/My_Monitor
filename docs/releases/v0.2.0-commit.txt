@@ -1,0 +1,11 @@
+feat: release v0.2.0 with optional web resource limits and idle memory optimizations
+
+Add a persisted low usage mode and test-mode resource thresholds while
+preserving credential, navigation, IPC, and HTTP collection protections.
+
+Fix floating-window DPI size oscillation during updates. Reduce hidden
+dashboard redraws, floating snapshot payloads, and safe idle page residency;
+reclaim clean standby dashboards while retaining drafts and view state.
+
+Update user, security, development, release documentation and demo media.
+Prepare the Windows x64 v0.2.0 preview distribution and checksums.

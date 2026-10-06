@@ -1,14 +1,21 @@
 {
   "name": "my-monitor",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Local desktop dashboard for balances, quotas and web metrics",
   "private": true,
   "license": "MIT",
   "author": "Felix_Jiang",
-  "repository": { "type": "git", "url": "https://github.com/Jiang-Felix/My_Monitor.git" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Jiang-Felix/My_Monitor.git"
+  },
   "homepage": "https://github.com/Jiang-Felix/My_Monitor#readme",
-  "bugs": { "url": "https://github.com/Jiang-Felix/My_Monitor/issues" },
-  "engines": { "node": ">=24" },
+  "bugs": {
+    "url": "https://github.com/Jiang-Felix/My_Monitor/issues"
+  },
+  "engines": {
+    "node": ">=24"
+  },
   "type": "module",
   "main": "desktop/main.js",
   "scripts": {

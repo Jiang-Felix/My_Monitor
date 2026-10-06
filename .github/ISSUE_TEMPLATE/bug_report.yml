@@ -10,7 +10,7 @@ body:
     id: version
     attributes:
       label: 软件版本 / App version
-      placeholder: 0.1.0
+      placeholder: 0.2.0
     validations:
       required: true
   - type: input
@@ -39,6 +39,12 @@ body:
       label: 实际行为 / Actual behavior
     validations:
       required: true
+  - type: textarea
+    id: resource_mode
+    attributes:
+      label: 资源模式与窗口状态 / Resource mode and window state
+      description: 网页或内存问题请注明低占用模式是否开启、是否改过阈值、数据源数量，以及主界面和浮窗是否显示。勿附真实配置文件。
+      placeholder: 低占用模式关闭；3 个网页来源；主界面隐藏到托盘、浮窗关闭；待机约 30 秒。
   - type: textarea
     id: evidence
     attributes:

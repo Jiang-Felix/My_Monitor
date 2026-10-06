@@ -2,6 +2,7 @@ import { staticMessages } from './locales-static.js';
 import { appMessages } from './locales-app.js';
 import { workspaceMessages } from './locales-workspace.js';
 import { desktopMessages } from './locales-desktop.js';
+import { resourceMessages } from './locales-resources.js';
 
 export const LANGUAGES=['zh-CN','en'];
 let language='zh-CN';
@@ -13,7 +14,7 @@ export function setLanguage(value) {
 export const getLanguage=()=>language;
 export const localeCode=()=>language==='en'?'en-US':'zh-CN';
 export const normalizeTerms=text=>String(text??'').replace(/悬浮窗/g,'浮窗').replace(/当前量|当前值|瞬时值/g,'实时数据').replace(/总量(?!数据)/g,'总量数据').replace(/检查点/g,'记录').replace(/监控台/g,'监控').replace(/采集/g,'监控').replace(/“数据”页/g,'“实时数据”页').replace(/资源指标/g,'实时数据指标').replace(/资源进度/g,'实时数据进度').replace(/连接你的资源/g,'连接实时数据').replace(/选择监控数值/g,'选取实时数据');
-const messages=Object.fromEntries(Object.entries({...desktopMessages,...staticMessages,...workspaceMessages,...appMessages}).map(([zh,en])=>[normalizeTerms(zh),en]));
+const messages=Object.fromEntries(Object.entries({...desktopMessages,...staticMessages,...workspaceMessages,...appMessages,...resourceMessages}).map(([zh,en])=>[normalizeTerms(zh),en]));
 const escape=text=>text.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
 const templates=Object.entries(messages).filter(([key])=>/\{\w+\}/.test(key)).map(([key,value])=>{
   const names=[],parts=key.split(/(\{\w+\})/);

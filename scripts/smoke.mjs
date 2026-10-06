@@ -8,7 +8,7 @@ const electron = require('electron');
 const data = await mkdtemp(join(tmpdir(), 'my-monitor-smoke-'));
 const env = { ...process.env };
 delete env.ELECTRON_RUN_AS_NODE;
-const phases=process.argv.includes('--floating-display-persistence-only')?[['--floating-display-write'],['--floating-display-read']]:process.argv.includes('--controls-persistence-only')?[['--controls-write'],['--controls-read']]:process.argv.includes('--themes-persistence-only')?[['--theme-write'],['--theme-read']]:process.argv.includes('--settings-persistence-only')?[['--settings-write'],['--settings-read']]:process.argv.includes('--position-only')?[['--position-write'],['--position-read']]:process.argv.includes('--language-persistence-only')?[['--language-write'],['--language-read']]:[process.argv.slice(2)];
+const phases=process.argv.includes('--low-usage-persistence-only')?[['--low-usage-write'],['--low-usage-read']]:process.argv.includes('--floating-display-persistence-only')?[['--floating-display-write'],['--floating-display-read']]:process.argv.includes('--controls-persistence-only')?[['--controls-write'],['--controls-read']]:process.argv.includes('--themes-persistence-only')?[['--theme-write'],['--theme-read']]:process.argv.includes('--settings-persistence-only')?[['--settings-write'],['--settings-read']]:process.argv.includes('--position-only')?[['--position-write'],['--position-read']]:process.argv.includes('--language-persistence-only')?[['--language-write'],['--language-read']]:[process.argv.slice(2)];
 try{
   for(const args of phases){
     const child=spawn(electron,['.','--smoke','--smoke-data',data,...args],{env,stdio:'inherit',windowsHide:true});

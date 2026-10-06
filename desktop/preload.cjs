@@ -28,5 +28,10 @@ contextBridge.exposeInMainWorld('monitor', {
     const listener = (_event, state) => callback(state);
     ipcRenderer.on('monitor:update', listener);
     return () => ipcRenderer.removeListener('monitor:update', listener);
+  },
+  onActivity: callback => {
+    const listener = (_event, active) => callback(active);
+    ipcRenderer.on('monitor:activity', listener);
+    return () => ipcRenderer.removeListener('monitor:activity', listener);
   }
 });

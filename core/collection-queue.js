@@ -12,6 +12,11 @@ export class BoundedQueue {
   }
   get activeCount() { return this.active.size; }
   get queuedCount() { return this.waiting.length; }
+  setConcurrency(value) {
+    if(!Number.isInteger(value)||value<1)throw new TypeError('Invalid collector concurrency');
+    this.concurrency=value;
+    while(!this.closed&&this.waiting.length&&this.active.size<this.concurrency)this.start(this.waiting.shift());
+  }
   run(job, { signal } = {}) {
     if (this.closed || signal?.aborted) return Promise.reject(cancellationError());
     if (this.active.size >= this.concurrency && this.waiting.length >= this.maxQueued) return Promise.reject(Object.assign(new Error('采集等待队列已满，稍后重试'), { code: 'rate', retryAfter: 1000 }));
